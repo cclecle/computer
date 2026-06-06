@@ -207,7 +207,7 @@
 			nameCounts[name] = (nameCounts[name] || 0) + 1;
 		}
 		return Object.entries(nameCounts)
-			.map(([name, count]) => count > 1 ? `${name} (${count})` : name)
+			.map(([name, count]) => count > 1 ? `${count} ${name}` : name)
 			.join(', ');
 	}
 
