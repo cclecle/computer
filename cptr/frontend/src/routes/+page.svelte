@@ -390,7 +390,7 @@
 							</div>
 						{:else if groupTab.type === 'chat'}
 							{#key groupTab.id}
-								<ChatPanel workspace={$currentWorkspace.path} chatId={groupTab.path?.startsWith('new-') ? undefined : groupTab.path} tabId={groupTab.id} />
+								<ChatPanel workspace={$currentWorkspace.path} chatId={groupTab.path?.startsWith('new-') || groupTab.path?.startsWith('pending-') ? undefined : groupTab.path} tabId={groupTab.id} />
 							{/key}
 						{:else if groupTab.type === 'preview' && groupTab.port}
 							<PortPreview port={groupTab.port} />

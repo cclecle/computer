@@ -268,19 +268,45 @@
 		autoScroll = true;
 		await tick();
 		chatInputEl?.resetHeight();
-		try {
-			// parent_id = last message in active path, or null for first message
-			const lastMsg = activePath.length > 0 ? activePath[activePath.length - 1].msg : null;
-			const parentId = lastMsg?.id ?? null;
 
+		// parent_id = last message in active path, or null for first message
+		const lastMsg = activePath.length > 0 ? activePath[activePath.length - 1].msg : null;
+		const parentId = lastMsg?.id ?? null;
+		const isNew = !chatId;
+
+		// ── Optimistic UI: add user message immediately ──────────
+		const tempId = `temp-${Date.now()}`;
+		const optimisticMsg: ChatMessageRow = {
+			id: tempId,
+			parent_id: parentId,
+			role: 'user',
+			content: text,
+			model: selectedModel,
+			done: true,
+			output: null,
+			usage: null,
+			meta: null,
+			created_at: Date.now() / 1000,
+		};
+		allMessages = [...allMessages, optimisticMsg];
+		currentMessageId = tempId;
+
+		// Update tab label instantly for new chats
+		if (isNew && tabId) {
+			updateTab(tabId, `pending-${tempId}`, text.slice(0, 40) || 'Chat');
+		}
+
+		try {
 			const result = await apiSendMessage(text, selectedModel, workspace, chatId ?? undefined, parentId, { auto_approve_tools: get(autoApproveTools) });
-			const isNew = !chatId;
 			await loadChat(result.chat_id);
 			if (isNew && tabId) {
 				updateTab(tabId, result.chat_id, text.slice(0, 40) || 'Chat');
 			}
 		} catch (e) {
 			console.error('[chat] send error', e);
+			// Remove the optimistic message on failure
+			allMessages = allMessages.filter((m) => m.id !== tempId);
+			currentMessageId = parentId;
 			throw e;
 		} finally {
 			sending = false;
