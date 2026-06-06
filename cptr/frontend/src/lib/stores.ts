@@ -119,8 +119,17 @@ export const workspaceList = writable<{ path: string; name: string }[]>([]);
 
 /** Global user preferences. */
 export const sidebarOpen = writable(
-	typeof window !== 'undefined' ? window.innerWidth >= 768 : false
+	typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
 );
+
+// Auto-close sidebar when window is resized below mobile breakpoint
+if (typeof window !== 'undefined') {
+	window.addEventListener('resize', () => {
+		if (window.innerWidth < 768) {
+			sidebarOpen.set(false);
+		}
+	});
+}
 export const sidebarWidth = writable(220);
 export const theme = writable<Theme>('dark');
 export const toolApprovalMode = writable<ToolApprovalMode>('auto');
