@@ -22,7 +22,7 @@ Life is short. Touch grass.
 
 **Your machine.** cptr serves the machine it runs on. The local filesystem, the local shell, local state. Where that machine lives is up to you.
 
-**Computer, not chat.** The core is the filesystem, the terminal, and git. Everything is a file, including AI conversations. cptr is a window into the real system, not a container on top of it.
+**Computer, not chat.** The core is the filesystem, the terminal, and git. Files over apps. Plain files on your machine, not content trapped inside another product. AI conversations are files too: searchable, editable, movable, commit-able. cptr is a window into the real system, not a container on top of it.
 
 Read our [Manifesto](MANIFESTO.md).
 
