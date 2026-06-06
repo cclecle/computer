@@ -14,7 +14,7 @@ import os
 import uuid
 from pathlib import Path
 from typing import get_type_hints
-from cptr.env import CHAT_TOOL_MAX_CHARS
+from cptr.env import CHAT_TOOL_COMMAND_MAX_CHARS, CHAT_TOOL_MAX_CHARS
 
 
 # ── Background task state ───────────────────────────────────
@@ -463,7 +463,7 @@ async def run_command(
         timeout = min(max(timeout, 5), 300)
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         output = stdout.decode(errors="replace").strip()
-        output = _truncate_output(output)
+        output = _truncate_output(output, max_chars=CHAT_TOOL_COMMAND_MAX_CHARS)
 
         if proc.returncode != 0:
             return f"Exit code {proc.returncode}\n{output}"
@@ -487,7 +487,7 @@ async def check_task(task_id: str, *, workspace: str) -> str:
 
     proc = task["proc"]
     output = task["output"].decode(errors="replace")
-    output = _truncate_output(output)
+    output = _truncate_output(output, max_chars=CHAT_TOOL_COMMAND_MAX_CHARS)
 
     done = task.get("done", False) or proc.returncode is not None
     if done:
