@@ -181,13 +181,16 @@
 
 	async function loadChat(id: string) {
 		chatId = id;
-		loading = true;
+		// Only show loading spinner on initial load (no messages yet).
+		// On reloads (e.g. after cancel), keep the DOM intact to preserve scroll position.
+		const isInitialLoad = allMessages.length === 0;
+		if (isInitialLoad) loading = true;
 		try {
 			const data = await getChat(id);
 			allMessages = data.messages;
 			currentMessageId = data.chat.current_message_id;
 		} finally {
-			loading = false;
+			if (isInitialLoad) loading = false;
 		}
 	}
 
