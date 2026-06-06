@@ -44,6 +44,25 @@ Opens in your browser. From other devices:
 cptr run --host 0.0.0.0
 ```
 
+## Docker
+
+Run cptr with Docker:
+
+```bash
+docker run --rm -it \
+  -p 8000:8000 \
+  -v cptr-data:/data \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  ghcr.io/open-webui/computer:latest
+```
+
+Then open the URL printed in the logs, usually `http://localhost:8000/?token=...`.
+
+`cptr` stores its state in `/data`. Mount your project into the container, like `-v "$PWD:/workspace"`, so cptr can access it.
+
+The `:dev` image is also available and tracks the `main` branch.
+
 ## License
 
 Open Use License. Source available. All rights reserved. See [LICENSE](LICENSE). [Enterprise licenses available](mailto:sales@openwebui.com).
