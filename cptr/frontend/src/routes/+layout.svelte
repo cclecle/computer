@@ -38,7 +38,6 @@
 	let { children } = $props();
 	let showQuickOpen = $state(false);
 	let showSettings = $state(false);
-	let terminalVvHeight = $state('');
 
 	// Auth state
 	type AuthState = 'checking' | 'needs_setup' | 'needs_login' | 'authenticated';
@@ -65,36 +64,30 @@
 			},
 			30 * 60 * 1000
 		);
-
-		// Terminal needs a JS height override because xterm uses a hidden
-		// textarea that doesn't trigger interactive-widget=resizes-content.
-		// Chat and other tabs use pure CSS (dvh) — no JS needed.
+		// iOS: Termius-style keyboard handling. visualViewport.height
+		// gives us the area above the keyboard. Set max-height on the
+		// main content column so the terminal shrinks to fit.
+		// The layout container's overflow:hidden clips the gap.
 		const vv = window.visualViewport;
-		let vpTimer: ReturnType<typeof setTimeout>;
 		if (vv) {
-			const update = () => {
-				clearTimeout(vpTimer);
-				vpTimer = setTimeout(() => {
-					const keyboardHeight = window.innerHeight - vv.height;
-					terminalVvHeight = keyboardHeight > 100 ? `${vv.height}px` : '';
-				}, 350);
+			const syncHeight = () => {
+				const col = document.getElementById('main-col');
+				if (!col) return;
+				const kbHeight = window.innerHeight - vv.height;
+				console.log('[viewport]', { innerHeight: window.innerHeight, vvHeight: vv.height, kbHeight });
+				col.style.maxHeight = kbHeight > 100 ? `${vv.height}px` : '';
 			};
-			vv.addEventListener('resize', update);
-
+			// iOS may fire 'scroll' instead of 'resize' when keyboard opens
+			vv.addEventListener('resize', syncHeight);
+			vv.addEventListener('scroll', syncHeight);
 			return () => {
-				clearTimeout(vpTimer);
 				clearInterval(healthCheck);
-				vv.removeEventListener('resize', update);
+				vv.removeEventListener('resize', syncHeight);
+				vv.removeEventListener('scroll', syncHeight);
 			};
 		}
-
 		return () => clearInterval(healthCheck);
 	});
-
-	// Only apply JS pixel height for terminal tabs; everything else uses CSS dvh.
-	const appHeight = $derived(
-		$activeTab?.type === 'terminal' && terminalVvHeight ? terminalVvHeight : ''
-	);
 
 	let startupToken = $state('');
 
@@ -256,11 +249,10 @@
 {:else if $stateLoaded}
 	<div
 		class="h-screen max-h-[100dvh] flex overflow-hidden font-sans antialiased text-gray-900 bg-white dark:text-gray-100 dark:bg-black"
-		style={appHeight ? `height:${appHeight};` : ''}
 	>
 		<Sidebar />
 
-		<div class="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+		<div id="main-col" class="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
 			{#if !$currentWorkspace}
 				<Bar />
 			{/if}

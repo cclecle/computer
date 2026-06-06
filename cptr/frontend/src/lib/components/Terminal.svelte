@@ -62,9 +62,6 @@
 		if (rect.width === 0 || rect.height === 0) return;
 		try {
 			fitAddon.fit();
-			// Do NOT scroll after fit. Rich CLI apps (htop, vim, Claude Code)
-			// manage their own cursor/viewport after SIGWINCH. Forcing scroll
-			// interferes with their rendering.
 		} catch {
 			// FitAddon can throw if terminal not properly attached
 		}
@@ -192,6 +189,18 @@
 		fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
 		term.open(containerEl);
+		// // iOS: Move xterm's textarea from inside .xterm-helpers (position:absolute,
+		// // offscreen) to a flex sibling BELOW the terminal.
+		// if ('ontouchstart' in window && term.textarea) {
+		// 	containerEl.after(term.textarea);
+		// 	term.focus = () => term.textarea?.focus();
+		//
+		// 	// xterm's mousedown calls ev.preventDefault() which blocks iOS
+		// 	// viewport adjustment. Focus on touchstart (fires before mousedown).
+		// 	containerEl.addEventListener('touchstart', () => {
+		// 		term.textarea?.focus();
+		// 	}, { passive: true });
+		// }
 
 		// GPU-accelerated rendering, 2-5x faster than canvas 2D.
 		// Falls back to canvas if WebGL is unavailable.
@@ -374,7 +383,10 @@
 	});
 </script>
 
-<div bind:this={containerEl} class="h-full w-full pt-1 pl-2 overflow-hidden"></div>
+<div class="flex flex-col h-full w-full">
+	<div bind:this={containerEl} class="flex-1 min-h-0 pt-1 pl-2 overflow-hidden"></div>
+	<!-- On mobile, xterm's textarea gets moved here as a flex sibling -->
+</div>
 
 <style>
 	@reference "../../app.css";
@@ -388,4 +400,23 @@
 		scrollbar-color: rgba(75, 85, 99, 0.4) transparent;
 		overscroll-behavior: contain;
 	}
+	/* When moved to flex sibling on mobile, override xterm's offscreen
+	   positioning. Make it a real in-flow element like chat's textarea.
+	   Use opacity:1 with transparent colors — iOS ignores opacity:0
+	   elements for viewport adjustment. */
+	/* :global(.xterm-helper-textarea) {
+		position: relative !important;
+		top: auto !important;
+		left: auto !important;
+		width: 100% !important;
+		height: 1px !important;
+		opacity: 1 !important;
+		color: transparent !important;
+		background: transparent !important;
+		caret-color: transparent !important;
+		border: none !important;
+		outline: none !important;
+		resize: none !important;
+		flex-shrink: 0;
+	} */
 </style>

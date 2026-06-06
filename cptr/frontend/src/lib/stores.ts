@@ -74,6 +74,7 @@ export interface UserPreferences {
 	workspaceOrder?: string[]; // ordered paths for sidebar drag-reorder
 	keybindings?: Record<string, string>; // user-customised keyboard shortcuts
 	version?: string; // last seen app version for changelog
+	selectedModelId?: string; // last selected chat model, synced across browsers
 }
 
 export type Theme = 'dark' | 'light' | 'system';
@@ -138,6 +139,7 @@ export const gitReviewOpen = writable(false);
 export const isGitRepo = writable(false);
 export type StreamingBehavior = 'queue' | 'interrupt';
 export const streamingBehavior = writable<StreamingBehavior>('queue');
+export const selectedModelId = writable<string>('');
 
 /** Saved workspace path order for sidebar drag-reorder. */
 export const workspaceOrder = writable<string[]>([]);
@@ -269,7 +271,8 @@ function persistPreferences(): void {
 			locale: i18next.language,
 			workspaceOrder: get(workspaceOrder),
 			keybindings: get(keybindings),
-			version: get(lastSeenVersion)
+			version: get(lastSeenVersion),
+			selectedModelId: get(selectedModelId) || undefined
 		};
 		savePreferences(prefs as unknown as Record<string, unknown>).catch(() => {});
 	}, 300);
@@ -303,6 +306,9 @@ function subscribeForPersistence() {
 	lastSeenVersion.subscribe(() => {
 		if (get(stateLoaded)) persistPreferences();
 	});
+	selectedModelId.subscribe(() => {
+		if (get(stateLoaded)) persistPreferences();
+	});
 	i18next.on('languageChanged', () => {
 		if (get(stateLoaded)) persistPreferences();
 	});
@@ -327,6 +333,7 @@ export async function loadPreferences(): Promise<void> {
 		if (Array.isArray(prefs.workspaceOrder)) workspaceOrder.set(prefs.workspaceOrder as string[]);
 		if (prefs.keybindings) loadKeybindings(prefs.keybindings as Record<string, string>);
 		if (prefs.version) lastSeenVersion.set(prefs.version as string);
+		if (prefs.selectedModelId) selectedModelId.set(prefs.selectedModelId as string);
 	} catch {
 		// First run, no preferences yet
 	}

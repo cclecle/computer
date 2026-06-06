@@ -24,7 +24,7 @@
 	import { socketStore } from '$lib/stores/socket.svelte';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { get } from 'svelte/store';
-	import { currentWorkspace, toolApprovalMode, streamingBehavior } from '$lib/stores';
+	import { currentWorkspace, toolApprovalMode, streamingBehavior, selectedModelId } from '$lib/stores';
 
 	import ChatInput from './ChatInput.svelte';
 	import UserMessage from './UserMessage.svelte';
@@ -355,11 +355,9 @@
 		if (chatId) loadChat(chatId);
 	}
 
-	const MODEL_STORAGE_KEY = 'cptr:chat:lastModel';
-
 	onMount(() => {
 		const models = get(chatModels);
-		const saved = localStorage.getItem(MODEL_STORAGE_KEY);
+		const saved = get(selectedModelId);
 		const dm = get(defaultModel);
 		if (saved && models.some((m) => m.id === saved)) selectedModel = saved;
 		else if (dm) selectedModel = dm;
@@ -397,7 +395,7 @@
 	// ── Persist model selection ─────────────────────────────────
 
 	$effect(() => {
-		if (selectedModel) localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
+		if (selectedModel) selectedModelId.set(selectedModel);
 	});
 
 	// ── Sync streaming state to shared store for tab icon ────
