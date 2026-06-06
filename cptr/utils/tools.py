@@ -75,7 +75,8 @@ async def read_file(
     workspace: str,
 ) -> str:
     """Read file contents with optional line range. Lines are 1-indexed.
-    :param path: Path relative to workspace root.
+    Supports absolute paths for user-attached files.
+    :param path: Path relative to workspace root, or absolute path for attached files.
     :param start_line: First line to read (1-indexed, 0 = from beginning).
     :param end_line: Last line to read (inclusive, 0 = to end of file).
     """
@@ -543,7 +544,20 @@ async def read_url(url: str, *, workspace: str) -> str:
 
 
 def _resolve_path(path: str, workspace: str) -> Path:
-    """Resolve a relative path within the workspace. Rejects traversal."""
+    """Resolve a path within the workspace or uploads dir. Rejects traversal."""
+    from cptr.utils.storage import UPLOADS_DIR
+
+    p = Path(path)
+    # Allow absolute paths to the uploads directory (for user-attached files)
+    if p.is_absolute():
+        full = p.resolve()
+        uploads = str(UPLOADS_DIR.resolve())
+        ws = str(Path(workspace).resolve())
+        if str(full).startswith(uploads) or str(full).startswith(ws):
+            return full
+        raise ValueError(f"Path outside allowed directories: {path}")
+
+    # Relative paths resolve against workspace
     ws = Path(workspace).resolve()
     full = (ws / path).resolve()
     if not str(full).startswith(str(ws)):
