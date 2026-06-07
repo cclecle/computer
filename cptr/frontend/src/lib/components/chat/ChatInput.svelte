@@ -456,8 +456,8 @@
 				{#if $planMode}
 					<button
 						type="button"
-						class="group p-1.5 flex gap-1 items-center text-xs rounded-full transition-colors duration-150
-							text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-white/8 dark:hover:bg-white/12 border border-gray-200/60 dark:border-white/8"
+						class="group p-[5px] flex gap-1 items-center text-xs rounded-full transition-colors duration-150
+						text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-white/8 dark:hover:bg-white/12 border border-gray-200/60 dark:border-white/8"
 						onclick={() => planMode.set(false)}
 					>
 						<svg
