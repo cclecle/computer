@@ -423,7 +423,16 @@ async def send_message(body: SendMessageRequest, request: Request):
         regeneration_prompt=body.regeneration_prompt,
     )
 
-    return {"chat_id": chat.id, "message_id": assistant_msg.id}
+    # Return the created messages so the frontend can append them
+    # directly — no separate GET needed, no client-side construction.
+    resp: dict = {
+        "chat_id": chat.id,
+        "message_id": assistant_msg.id,
+        "assistant_message": _message_dict(assistant_msg),
+    }
+    if parent_msg is None or parent_msg.role != "user":
+        resp["user_message"] = _message_dict(user_msg)
+    return resp
 
 
 # ── Approve / reject a pending tool call ────────────────────

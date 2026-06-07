@@ -541,8 +541,9 @@
 								created_at: Date.now()
 							}
 						];
-					} else {
-						await loadChat(result.chat_id);
+					} else if (result.assistant_message) {
+						allMessages = [...allMessages, result.assistant_message];
+						currentMessageId = result.message_id;
 					}
 				} catch (e) {
 					console.error('[chat] send (queue) error', e);
@@ -588,7 +589,17 @@
 				undefined,
 				files
 			);
-			await loadChat(result.chat_id);
+
+			// Swap optimistic temp msg with real messages from backend.
+			chatId = result.chat_id;
+			const withoutTemp = allMessages.filter((m) => m.id !== tempId);
+			if (result.user_message && result.assistant_message) {
+				allMessages = [...withoutTemp, result.user_message, result.assistant_message];
+			} else if (result.assistant_message) {
+				allMessages = [...withoutTemp, result.assistant_message];
+			}
+			currentMessageId = result.message_id;
+
 			if (isNew && tabId) {
 				updateTab(tabId, result.chat_id, text.slice(0, 40) || 'Chat');
 			}
@@ -737,7 +748,10 @@
 				tool_approval_mode: mode,
 				plan_mode: get(planMode)
 			});
-			await loadChat(result.chat_id);
+			if (result.assistant_message) {
+				allMessages = [...allMessages, result.assistant_message];
+				currentMessageId = result.message_id;
+			}
 		} catch (e) {
 			console.error('[chat] regenerate error', e);
 		}
@@ -777,7 +791,10 @@
 					msg.parent_id,
 					{ tool_approval_mode: get(toolApprovalMode), plan_mode: get(planMode) }
 				);
-				await loadChat(result.chat_id);
+				if (result.user_message && result.assistant_message) {
+					allMessages = [...allMessages, result.user_message, result.assistant_message];
+					currentMessageId = result.message_id;
+				}
 			} catch (e) {
 				console.error('[chat] edit-send error', e);
 			}

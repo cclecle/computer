@@ -36,6 +36,8 @@ export interface SendMessageResult {
 	chat_id: string;
 	message_id: string;
 	queued?: boolean;
+	user_message?: ChatMessageRow;
+	assistant_message?: ChatMessageRow;
 }
 
 // ── Queries ─────────────────────────────────────────────────

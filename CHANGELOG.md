@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-06-07
+
+### Fixed
+
+- 🔄 **Messages no longer disappear after sending.** Fixed a race condition where the frontend needed a separate GET request after sending a message, creating a window where socket events were dropped. The POST now returns the created messages directly, eliminating the round-trip and the race.
+
 ## [0.1.6] - 2026-06-07
 
 ### Added
