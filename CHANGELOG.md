@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-06-11
+
+### Added
+
+- 🤖 **Per-model configuration.** Set custom parameters (temperature, top_p, etc.) for each model or as global defaults. Per-chat overrides still take priority.
+- 🧠 **Automatic context compaction.** Long conversations are automatically summarized to keep things running smoothly, no manual intervention needed.
+- ➕ **Per-chat parameters.** Override model parameters for a single chat session from the `+` menu.
+
+### Changed
+
+- ⚙️ **Unified settings.** Admin panel merged into Settings. No more separate modal. Admin sections appear automatically for admin users.
+- ⌨️ **Shortcut hint in menu.** The Settings menu item now shows its keyboard shortcut.
+
 ## [0.2.1] - 2026-06-11
 
 ### Added
