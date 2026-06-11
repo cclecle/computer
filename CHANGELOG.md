@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-06-11
+
+### Added
+
+- 🔍 **Global search modal.** New unified search (⌘K / ⌘⇧F) that finds chats by title *and* message content, plus files by name — across all workspaces or scoped to the active one. Shows recent chats when the query is empty. Replaces the old QuickOpen modal.
+- 🌐 **Perplexity web search provider.** Added Perplexity as a first-class search provider (auto-detected between Exa and Tavily when `PERPLEXITY_API_KEY` is set).
+- 🌐 **Chat Completions search provider.** Any OpenAI-compatible `/chat/completions` endpoint (e.g. Perplexity Sonar, LiteLLM proxy) can now be used for web search. Configure via Settings or environment variables.
+- ➕ **New Chat button per workspace.** Each workspace row in the sidebar now shows a pencil icon on hover to quickly create a new chat.
+
+### Fixed
+
+- 🔍 **Search no longer pinned to last workspace.** When on a non-workspace page (e.g. Automations), search results are now global instead of silently scoped to the last-selected workspace.
+- 🔄 **Sidebar chat cache invalidated globally.** Chat events from automations or other tabs now clear the cache for *all* workspaces, so re-expanding any workspace shows fresh data.
+- 🔄 **New chats from automations appear in landing page.** The chat landing now debounce-reloads when it receives a socket event for an unknown chat, so automation-created chats appear without a manual refresh.
+- 🏷️ **Chat tab labels update from DB title.** Opening a chat from search or sidebar now shows the real title instead of a generic "Chat" label.
+- 🔁 **Duplicate new-chat tabs prevented.** Opening a new chat reuses an existing empty/pending chat tab instead of creating duplicates.
+
+### Changed
+
+- 🔗 **URL-driven navigation for chat and file intents.** Clicking a chat or file in the sidebar/search now uses URL query params (`chatId`, `file`, `dir`) which are consumed and cleaned up after navigation, enabling deep-linking and back-button support.
+- 🍞 **Improved toast notifications.** Toaster now uses rich colors and close buttons for better visibility.
+- 🔒 **Automations sidebar link hidden when chat is disabled.** The Automations nav item is now conditionally shown only when the chat/LLM backend is available.
+- ⬆️ **Python 3.10 minimum.** Bumped `requires-python` from `>=3.9` to `>=3.10`.
+- 📦 **Added `truststore` dependency.** Uses platform-native TLS certificate stores for better certificate handling.
+- 🌍 **i18n for search UI.** Search-related strings added across all 10 supported locales.
+
 ## [0.2.0] - 2026-06-09
 
 ### Added
