@@ -29,6 +29,8 @@
 		maxHeight?: string;
 		/** Optional header snippet rendered above items (e.g. search input). */
 		header?: Snippet;
+		/** Optional snippet rendered when items array is empty. */
+		empty?: Snippet;
 		/** Additional CSS classes for the menu container. */
 		className?: string;
 		/** Horizontal alignment relative to anchor: 'start' (left) or 'end' (right). */
@@ -43,6 +45,7 @@
 		preferAbove = false,
 		maxHeight,
 		header,
+		empty,
 		className = '',
 		align = 'start'
 	}: Props = $props();
@@ -148,44 +151,48 @@
 	{/if}
 
 	<div style={maxHeight ? `max-height: ${maxHeight}; overflow-y: auto;` : ''}>
-		{#each items as item}
-			{#if item.divider}
-				<div class="h-px bg-gray-100/50 dark:bg-white/3 mx-1 my-0.5"></div>
-			{:else}
-				<button
-					class="flex items-center gap-2 w-full h-6 px-2 rounded-xl text-xs transition-colors duration-75
-						{item.active
-						? 'text-gray-900 dark:text-white bg-gray-50 dark:bg-white/5'
-						: 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}"
-					onclick={() => {
-						item.onclick();
-						onclose();
-					}}
-				>
-					{#if item.image}
-						<img src={item.image} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
-					{:else if item.icon}
-						<Icon name={item.icon} size={14} />
-					{/if}
-					<span class="flex-1 text-left truncate">{item.label}</span>
-					{#if item.shortcut}
-						<KeyPill text={item.shortcut} class="ml-auto shrink-0" />
-					{/if}
-					{#if item.check && item.active}
-						<svg
-							class="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<polyline points="20 6 9 17 4 12" />
-						</svg>
-					{/if}
-				</button>
-			{/if}
-		{/each}
+		{#if items.length === 0 && empty}
+			{@render empty()}
+		{:else}
+			{#each items as item}
+				{#if item.divider}
+					<div class="h-px bg-gray-100/50 dark:bg-white/3 mx-1 my-0.5"></div>
+				{:else}
+					<button
+						class="flex items-center gap-2 w-full h-6 px-2 rounded-xl text-xs transition-colors duration-75
+							{item.active
+							? 'text-gray-900 dark:text-white bg-gray-50 dark:bg-white/5'
+							: 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}"
+						onclick={() => {
+							item.onclick();
+							onclose();
+						}}
+					>
+						{#if item.image}
+							<img src={item.image} alt="" class="w-4 h-4 rounded-full object-cover shrink-0" />
+						{:else if item.icon}
+							<Icon name={item.icon} size={14} />
+						{/if}
+						<span class="flex-1 text-left truncate">{item.label}</span>
+						{#if item.shortcut}
+							<KeyPill text={item.shortcut} class="ml-auto shrink-0" />
+						{/if}
+						{#if item.check && item.active}
+							<svg
+								class="w-3 h-3 shrink-0 text-gray-400 dark:text-gray-500"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<polyline points="20 6 9 17 4 12" />
+							</svg>
+						{/if}
+					</button>
+				{/if}
+			{/each}
+		{/if}
 	</div>
 </div>

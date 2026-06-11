@@ -31,6 +31,7 @@
 	);
 
 	async function toggle() {
+		if ($chatModels.length === 0) return;
 		if (open) {
 			open = false;
 			return;
@@ -50,22 +51,26 @@
 	onclick={toggle}
 >
 	<span class="truncate max-w-[160px]"
-		>{$chatModels.find((m) => m.id === selectedModel)?.name || 'Select model'}</span
+		>{$chatModels.length === 0
+			? 'No models available'
+			: $chatModels.find((m) => m.id === selectedModel)?.name || 'Select model'}</span
 	>
-	<svg
-		class="w-3 h-3 opacity-50"
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="2.5"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-	>
-		<polyline points="6 9 12 15 18 9" />
-	</svg>
+	{#if $chatModels.length > 0}
+		<svg
+			class="w-3 h-3 opacity-50"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2.5"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+		>
+			<polyline points="6 9 12 15 18 9" />
+		</svg>
+	{/if}
 </button>
 
-{#if open && btnEl}
+{#if open && btnEl && $chatModels.length > 0}
 	<DropdownMenu
 		items={menuItems}
 		anchor={btnEl}
@@ -98,6 +103,9 @@
 					}}
 				/>
 			</div>
+		{/snippet}
+		{#snippet empty()}
+			<div class="px-3 py-1.5 text-[11px] text-gray-400 dark:text-gray-500 text-center">No matches</div>
 		{/snippet}
 	</DropdownMenu>
 {/if}
