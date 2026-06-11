@@ -229,7 +229,13 @@
 		href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap"
 		rel="stylesheet"
 	/>
-	<title>{$currentWorkspace ? `${$currentWorkspace.name} / cptr` : 'cptr'}</title>
+	<title>{$activeTab && $activeTab.type !== 'files'
+		? $currentWorkspace
+			? `${$activeTab.label} / ${$currentWorkspace.name} / cptr`
+			: `${$activeTab.label} / cptr`
+		: $currentWorkspace
+			? `${$currentWorkspace.name} / cptr`
+			: 'cptr'}</title>
 	<meta name="description" content={$t('app.tagline')} />
 </svelte:head>
 
