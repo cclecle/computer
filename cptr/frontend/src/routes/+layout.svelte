@@ -13,6 +13,7 @@
 	import SettingsModal from '$lib/components/SettingsModal.svelte';
 	import AuthScreen from '$lib/components/AuthScreen.svelte';
 	import ChangelogModal from '$lib/components/ChangelogModal.svelte';
+	import UpdateToast from '$lib/components/UpdateToast.svelte';
 	import { Toaster } from 'svelte-sonner';
 	import {
 		activeTab,
@@ -26,20 +27,24 @@
 		closeGroup,
 		appVersion,
 		lastSeenVersion,
+		latestVersion,
+		updateAvailable,
 		showChangelog,
 		showSearch
 	} from '$lib/stores';
 	import { matchKeybinding, executeAction } from '$lib/stores/keybindings';
 	import { systemEvents } from '$lib/stores/systemEvents.svelte';
 	import { socketStore } from '$lib/stores/socket.svelte';
-	import { setSession, clearSession } from '$lib/session';
+	import { setSession, clearSession, session } from '$lib/session';
 	import { getSession, getConfig } from '$lib/apis/auth';
+	import { fetchJSON } from '$lib/apis';
 	import { gitStatusStore } from '$lib/stores/gitStatus.svelte';
 	import { t } from '$lib/i18n';
 	import { refreshChatState, bindGlobalChatListener } from '$lib/stores/chat';
 
 	let { children } = $props();
 	let showSettings = $state(false);
+	let showUpdateToast = $state(false);
 
 	// Auth state
 	type AuthState = 'checking' | 'needs_setup' | 'needs_login' | 'authenticated';
@@ -141,6 +146,9 @@
 				authState = 'authenticated';
 				initState();
 				refreshChatState();
+
+				// Check for version updates (admin only, after session is set)
+				checkForUpdates();
 			} else {
 				const cfg = await getConfig();
 				authMode = cfg.auth_mode || 'password';
@@ -172,6 +180,29 @@
 			}
 		} catch {}
 		authState = 'needs_login';
+	}
+
+	async function checkForUpdates() {
+		try {
+			const sess = $session;
+			if (!sess || sess.role !== 'admin') return;
+
+			// 24-hour dismiss cooldown
+			const dismissed = localStorage.getItem('dismissedUpdateToast');
+			if (dismissed) {
+				const elapsed = Date.now() - Number(dismissed);
+				if (elapsed < 24 * 60 * 60 * 1000) return;
+			}
+
+			const data = await fetchJSON<{ current: string; latest: string }>('/api/version/updates');
+			latestVersion.set(data.latest);
+			// Show toast if update is available (reactive via $updateAvailable)
+			if (data.current !== data.latest) {
+				showUpdateToast = true;
+			}
+		} catch {
+			// Silently ignore (non-admin, network error, etc.)
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -286,6 +317,14 @@
 		<SettingsModal onclose={() => (showSettings = false)} />
 	{/if}
 	<ChangelogModal />
+	{#if $updateAvailable && showUpdateToast}
+		<UpdateToast
+			onclose={() => {
+				showUpdateToast = false;
+				localStorage.setItem('dismissedUpdateToast', Date.now().toString());
+			}}
+		/>
+	{/if}
 {:else}
 	<div class="flex items-center justify-center h-dvh bg-white dark:bg-black">
 		<Spinner size={20} />

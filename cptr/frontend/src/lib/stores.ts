@@ -139,6 +139,20 @@ export const planMode = writable(false);
 export const requestParams = writable<Record<string, unknown>>({});
 export const appVersion = writable('');
 export const lastSeenVersion = writable('');
+export const latestVersion = writable('');
+export const updateAvailable = derived(
+	[appVersion, latestVersion],
+	([$app, $latest]) => {
+		if (!$app || !$latest || $app === 'dev' || $app === '0.0.0') return false;
+		return (
+			$app.localeCompare($latest, undefined, {
+				numeric: true,
+				sensitivity: 'case',
+				caseFirst: 'upper'
+			}) < 0
+		);
+	}
+);
 export const showChangelog = writable(false);
 export const showSearch = writable(false);
 /** @deprecated Use toolApprovalMode */

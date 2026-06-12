@@ -297,5 +297,9 @@
 	"models.systemPromptHint": "Default instructions sent to the model. Use {{VARIABLES}} for dynamic content.",
 	"models.systemPromptInherited": "Inherits global default",
 	"models.templateVariables": "Variables",
-	"models.resetToDefault": "Reset"
+	"models.resetToDefault": "Reset",
+
+	"update.available": "A new version (v{{version}}) is available.",
+	"update.viewRelease": "View release notes →",
+	"update.updateAvailable": "Update available: v{{version}}"
 }
