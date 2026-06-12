@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-06-12
+
+### Added
+
+- 🌐 **Browser tools.** Browse the web from chat. Navigate pages, click elements, type into forms, take screenshots, and run JavaScript. Works with local Chrome (auto-launched), Firecrawl, or Browser-Use. Enable in Settings > Browser.
+- 🖼️ **Image understanding.** The AI can now read and describe images from your workspace. Open a screenshot or image file and it just works, across all providers.
+- 🔴 **Error toasts.** When something goes wrong during a response (API errors, model failures), you'll now see a clear error message in the chat and a toast notification instead of silent failures.
+
+### Fixed
+
+- 🔁 **Responses API multi-turn tool calling.** Fixed an issue where tool calls would stop after the first round when using OpenAI's Responses API. The AI now correctly loops through multiple tool calls as expected.
+- 💬 **`/new` command in Telegram/Discord.** Starting a new conversation with `/new` now actually creates a fresh chat instead of continuing the previous one.
+- 🛡️ **Responses API spec compliance.** Input messages, tool outputs, and error handling now fully follow the Open Responses specification, preventing unexpected 400 errors.
+
 ## [0.3.0] - 2026-06-12
 
 ### Added
