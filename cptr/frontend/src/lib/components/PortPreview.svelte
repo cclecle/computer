@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip';
 	import Icon from './Icon.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		port: number;
@@ -174,7 +175,7 @@
 	<div class="preview-content">
 		{#if loadError}
 			<div class="preview-error">
-				<p class="error-title">Cannot connect</p>
+				<p class="error-title">{$t('port.cannotConnect')}</p>
 				<p class="error-sub">localhost:{port} is not responding</p>
 				<button class="error-retry" onclick={refresh}>Retry</button>
 			</div>

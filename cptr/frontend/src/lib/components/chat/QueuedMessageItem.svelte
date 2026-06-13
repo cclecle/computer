@@ -7,6 +7,8 @@
 		ondelete: (id: string) => void;
 	}
 	let { id, content, onsendnow, onedit, ondelete }: Props = $props();
+
+	import { t } from '$lib/i18n';
 </script>
 
 <div class="flex items-center gap-2 px-2 py-1">
@@ -35,7 +37,7 @@
 		<button
 			type="button"
 			class="p-1 rounded-md text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-			title="Send now"
+			title={$t('chat.sendNow')}
 			onclick={() => onsendnow(id)}
 		>
 			<svg
@@ -54,7 +56,7 @@
 		<button
 			type="button"
 			class="p-1 rounded-md text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-			title="Edit"
+			title={$t('common.edit')}
 			onclick={() => onedit(id)}
 		>
 			<svg
@@ -75,7 +77,7 @@
 		<button
 			type="button"
 			class="p-1 rounded-md text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-			title="Remove"
+			title={$t('common.remove')}
 			onclick={() => ondelete(id)}
 		>
 			<svg

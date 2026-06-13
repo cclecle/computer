@@ -3,6 +3,7 @@
 	import Icon from '../Icon.svelte';
 	import { fileIconName } from '$lib/utils/fileIcon';
 	import { openFileTab, setFileBrowserCwd, setActiveTab } from '$lib/stores';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		content: string;
@@ -112,16 +113,16 @@
 			<div class="flex justify-between mt-2 text-[12px] font-medium">
 				<button
 					class="px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 bg-gray-100 dark:bg-white/6 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors duration-100"
-					onclick={saveEdit}>Save</button
+					onclick={saveEdit}>{$t('common.save')}</button
 				>
 				<div class="flex gap-1.5">
 					<button
 						class="px-3 py-1 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-						onclick={cancelEdit}>Cancel</button
+						onclick={cancelEdit}>{$t('common.cancel')}</button
 					>
 					<button
 						class="px-3 py-1 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors duration-100"
-						onclick={sendEdit}>Send</button
+						onclick={sendEdit}>{$t('chat.send')}</button
 					>
 				</div>
 			</div>
@@ -186,7 +187,7 @@
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-default transition-colors duration-100"
 						disabled={siblingIndex === 0}
 						onclick={() => onnavigate?.(-1)}
-						aria-label="Previous message"
+						aria-label={$t('chat.prevMessage')}
 					>
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 							><path
@@ -204,7 +205,7 @@
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-default transition-colors duration-100"
 						disabled={siblingIndex === siblingTotal - 1}
 						onclick={() => onnavigate?.(1)}
-						aria-label="Next message"
+						aria-label={$t('chat.nextMessage')}
 					>
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 							><path
@@ -220,7 +221,7 @@
 					<button
 						class="p-1 rounded-md text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
 						onclick={startEdit}
-						aria-label="Edit message"
+						aria-label={$t('chat.editMessage')}
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -241,7 +242,7 @@
 				<button
 					class="p-1 rounded-md text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
 					onclick={copyContent}
-					aria-label="Copy message"
+					aria-label={$t('chat.copyMessage')}
 				>
 					{#if copied}
 						<svg

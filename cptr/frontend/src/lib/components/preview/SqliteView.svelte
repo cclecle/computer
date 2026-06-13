@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { fetchHandler } from '$lib/apis';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		src: string;
@@ -47,7 +48,7 @@
 			}
 		} catch (e: any) {
 			console.error('SQLite load error:', e);
-			error = e.message || 'Failed to load database.';
+			error = e.message || $t('sqlite.loadError');
 		} finally {
 			loading = false;
 		}
@@ -122,8 +123,8 @@
 	}
 
 	function formatCell(val: unknown): string {
-		if (val === null) return 'NULL';
-		if (val instanceof Uint8Array) return `[BLOB ${val.length}B]`;
+		if (val === null) return $t('sqlite.null');
+		if (val instanceof Uint8Array) return $t('sqlite.blob', { size: val.length });
 		return String(val);
 	}
 
@@ -168,7 +169,7 @@
 				class:active={queryMode}
 				onclick={() => {
 					queryMode = true;
-				}}>SQL</button
+				}}>{$t('sqlite.sql')}</button
 			>
 		</div>
 
@@ -184,7 +185,7 @@
 						if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runQuery();
 					}}
 				></textarea>
-				<button class="run-btn" onclick={runQuery}>Run ⌘↵</button>
+				<button class="run-btn" onclick={runQuery}>{$t('sqlite.run')}</button>
 			</div>
 		{/if}
 
@@ -219,12 +220,12 @@
 		<!-- Pagination -->
 		{#if !queryMode && totalRows > PAGE_SIZE}
 			<div class="pagination">
-				<button class="page-btn" onclick={prevPage} disabled={page === 0}>← Prev</button>
+				<button class="page-btn" onclick={prevPage} disabled={page === 0}>{$t('sqlite.prev')}</button>
 				<span class="page-info">
-					{page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalRows)} of {totalRows}
+					{$t('sqlite.pageInfo', { start: page * PAGE_SIZE + 1, end: Math.min((page + 1) * PAGE_SIZE, totalRows), total: totalRows })}
 				</span>
 				<button class="page-btn" onclick={nextPage} disabled={(page + 1) * PAGE_SIZE >= totalRows}
-					>Next →</button
+					>{$t('sqlite.next')}</button
 				>
 			</div>
 		{/if}

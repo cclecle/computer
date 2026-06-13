@@ -6,6 +6,7 @@
 	import MarkdownRenderer from '$lib/components/markdown/MarkdownRenderer.svelte';
 	import OutputEditView from './OutputEditView.svelte';
 	import { currentWorkspace, openFileTab } from '$lib/stores';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		content: string;
@@ -139,38 +140,42 @@
 
 	/** Human-readable label for a tool call */
 	function toolLabel(name: string, args: any): string {
+		const _t = $t;
 		switch (name) {
 			case 'read_file': {
-				const range = args.start_line ? ` L${args.start_line}–${args.end_line || 'end'}` : '';
-				return `Read ${shortPath(args.path)}${range}`;
+				const p = shortPath(args.path);
+				if (args.start_line) return _t('chat.tool.readFileRange', { path: p, range: `${args.start_line}–${args.end_line || 'end'}` });
+				return _t('chat.tool.readFile', { path: p });
 			}
 			case 'edit_file':
-				return `Edit ${shortPath(args.path)}`;
+				return _t('chat.tool.editFile', { path: shortPath(args.path) });
 			case 'multi_edit_file':
-				return `Multi-edit ${shortPath(args.path)}`;
+				return _t('chat.tool.multiEditFile', { path: shortPath(args.path) });
 			case 'create_file':
-				return `Create ${shortPath(args.path)}`;
+				return _t('chat.tool.createFile', { path: shortPath(args.path) });
 			case 'write_file':
-				return `Write ${shortPath(args.path)}`;
+				return _t('chat.tool.writeFile', { path: shortPath(args.path) });
 			case 'list_directory':
-				return `List ${shortPath(args.path)}${args.recursive ? ' (recursive)' : ''}`;
+				return args.recursive
+					? _t('chat.tool.listDirectoryRecursive', { path: shortPath(args.path) })
+					: _t('chat.tool.listDirectory', { path: shortPath(args.path) });
 			case 'search_files': {
-				const scope = args.include ? ` in ${args.include}` : '';
-				return `Search "${args.query || '?'}"${scope}`;
+				const scope = args.include ? _t('chat.tool.searchFilesScope', { include: args.include }) : '';
+				return _t('chat.tool.searchFiles', { query: args.query || '?', scope });
 			}
 			case 'run_command':
-				return args.background ? `Background: ${args.command || '?'}` : args.command || '?';
+				return args.background ? _t('chat.tool.backgroundCommand', { command: args.command || '?' }) : args.command || '?';
 			case 'check_task':
-				return `Check task ${args.task_id || '?'}`;
+				return _t('chat.tool.checkTask', { id: args.task_id || '?' });
 			case 'kill_task':
-				return `Kill task ${args.task_id || '?'}`;
+				return _t('chat.tool.killTask', { id: args.task_id || '?' });
 			case 'web_search':
-				return `Search web: "${args.query || '?'}"`;
+				return _t('chat.tool.webSearch', { query: args.query || '?' });
 			case 'read_url': {
 				try {
-					return `Fetch ${new URL(args.url).hostname}`;
+					return _t('chat.tool.fetchUrl', { hostname: new URL(args.url).hostname });
 				} catch {
-					return `Fetch URL`;
+					return _t('chat.tool.fetchUrlFallback');
 				}
 			}
 			default:
@@ -329,16 +334,16 @@
 			<div class="flex justify-between mt-2 text-[12px] font-medium">
 				<button
 					class="px-3 py-1 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-					onclick={saveAsCopy}>Save As</button
+					onclick={saveAsCopy}>{$t('chat.saveAs')}</button
 				>
 				<div class="flex gap-1.5">
 					<button
 						class="px-3 py-1 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
-						onclick={cancelEdit}>Cancel</button
+						onclick={cancelEdit}>{$t('common.cancel')}</button
 					>
 					<button
 						class="px-3 py-1 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-black hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors duration-100"
-						onclick={saveEdit}>Save</button
+						onclick={saveEdit}>{$t('common.save')}</button
 					>
 				</div>
 			</div>
@@ -395,7 +400,7 @@
 									/>
 								</svg>
 								<span class="text-xs font-medium text-gray-800 dark:text-gray-100"
-									>{artifact.title || 'Artifact'}</span
+									>{artifact.title || $t('chat.artifact')}</span
 								>
 							</div>
 							{#if preview}
@@ -419,7 +424,7 @@
 							<!-- Group header -->
 							<button
 								class="w-full min-w-0 text-left text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition cursor-pointer"
-								aria-label="Toggle tool calls"
+								aria-label={$t('chat.toggleToolCalls')}
 								aria-expanded={isGroupOpen}
 								onclick={() => toggleGroupExpanded(groupIdx)}
 							>
@@ -513,7 +518,7 @@
 									<!-- Summary text -->
 									<div class="flex-1 min-w-0 line-clamp-1">
 										<span class="text-gray-600 dark:text-gray-300"
-											>{hasPending ? 'Exploring' : 'Explored'}</span
+											>{hasPending ? $t('chat.exploring') : $t('chat.explored')}</span
 										>
 										{#if groupSummaryText(calls)}
 											<span class="text-gray-400 dark:text-gray-500 ml-1"
@@ -673,7 +678,7 @@
 																	hover:bg-gray-200 dark:hover:bg-white/12
 																	transition-colors duration-100"
 																	onclick={() => onapprove(messageId, item.call_id, true)}
-																	>Allow</button
+																	>{$t('chat.allow')}</button
 																>
 																<button
 																	class="text-[11px] px-2 py-0.5 rounded-md
@@ -681,7 +686,7 @@
 																	hover:text-gray-600 dark:hover:text-gray-300
 																	transition-colors duration-100"
 																	onclick={() => onapprove(messageId, item.call_id, false)}
-																	>Deny</button
+																	>{$t('chat.deny')}</button
 																>
 															</span>
 														{:else}
@@ -720,7 +725,7 @@
 																	<div
 																		class="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5 px-1"
 																	>
-																		Input
+																		{$t('chat.toolInput')}
 																	</div>
 																	{#if toolName === 'edit_file' && args.target}
 																		<!-- Diff view for edits -->
@@ -752,7 +757,7 @@
 																			<div
 																				class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 px-1"
 																			>
-																				Lines {args.start_line}–{args.end_line || 'end'}
+																				{$t('chat.toolLines', { start: args.start_line, end: args.end_line || 'end' })}
 																			</div>
 																		{/if}
 																	{:else if toolName === 'run_command'}
@@ -786,7 +791,7 @@
 																	<div
 																		class="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5 px-1"
 																	>
-																		Output
+																		{$t('chat.toolOutput')}
 																	</div>
 																	<div class="w-full min-w-0 overflow-hidden">
 																		<pre
@@ -798,7 +803,7 @@
 																			<div
 																				class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 px-1"
 																			>
-																				{pairedOutput.output.length.toLocaleString()} total characters
+																				{$t('chat.totalChars', { count: pairedOutput.output.length.toLocaleString() })}
 																			</div>
 																		{/if}
 																	</div>
@@ -829,14 +834,14 @@
 													bg-gray-100 dark:bg-white/8
 													hover:bg-gray-200 dark:hover:bg-white/12
 													transition-colors duration-100"
-													onclick={() => onapprove(messageId, item.call_id, true)}>Allow</button
+													onclick={() => onapprove(messageId, item.call_id, true)}>{$t('chat.allow')}</button
 												>
 												<button
 													class="text-[11px] px-2 py-0.5 rounded-md
 													text-gray-400 dark:text-gray-500
 													hover:text-gray-600 dark:hover:text-gray-300
 													transition-colors duration-100"
-													onclick={() => onapprove(messageId, item.call_id, false)}>Deny</button
+													onclick={() => onapprove(messageId, item.call_id, false)}>{$t('chat.deny')}</button
 												>
 											</span>
 										</div>
@@ -867,7 +872,7 @@
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-default transition-colors duration-100"
 						disabled={siblingIndex === 0}
 						onclick={() => onnavigate?.(-1)}
-						aria-label="Previous response"
+						aria-label={$t('chat.prevResponse')}
 					>
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 							><path
@@ -885,7 +890,7 @@
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-default transition-colors duration-100"
 						disabled={siblingIndex === siblingTotal - 1}
 						onclick={() => onnavigate?.(1)}
-						aria-label="Next response"
+						aria-label={$t('chat.nextResponse')}
 					>
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 							><path
@@ -901,7 +906,7 @@
 					<button
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
 						onclick={startEdit}
-						aria-label="Edit response"
+						aria-label={$t('chat.editResponse')}
 					>
 						<svg
 							class="w-3.5 h-3.5"
@@ -921,7 +926,7 @@
 					<button
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
 						onclick={copyContent}
-						aria-label="Copy response"
+						aria-label={$t('chat.copyResponse')}
 					>
 						{#if copied}
 							<svg
@@ -958,7 +963,7 @@
 					<button
 						class="p-0.5 rounded text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100"
 						onclick={onregenerate}
-						aria-label="Regenerate response"
+						aria-label={$t('chat.regenerateResponse')}
 					>
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
 							><path
@@ -977,7 +982,7 @@
 							onclick={() => (showUsageTooltip = !showUsageTooltip)}
 							onmouseenter={() => (showUsageTooltip = true)}
 							onmouseleave={() => (showUsageTooltip = false)}
-							aria-label="Usage info"
+							aria-label={$t('chat.usageInfo')}
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"

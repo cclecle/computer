@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		onClick?: () => void;
@@ -72,7 +73,7 @@
 	<button
 		bind:this={closeButtonEl}
 		class="absolute -top-0.5 -left-0.5 p-0.5 rounded-full opacity-0 group-hover:opacity-100 bg-gray-200 dark:bg-[#222] text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-[#333] hover:text-gray-700 dark:hover:text-gray-300 border-none cursor-pointer transition-opacity duration-150 z-10"
-		aria-label="Dismiss notification"
+		aria-label={$t('a11y.dismissNotification')}
 		onclick={(e) => { e.stopPropagation(); onclose(); }}
 	>
 		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3">

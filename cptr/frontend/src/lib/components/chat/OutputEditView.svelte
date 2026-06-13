@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, tick } from 'svelte';
+	import { t } from '$lib/i18n';
 	import { basicSetup, EditorView } from 'codemirror';
 	import { keymap } from '@codemirror/view';
 	import { Compartment, EditorState } from '@codemirror/state';
@@ -252,7 +253,7 @@
 									updateMessageText(di.indices[0], (e.target as HTMLTextAreaElement).value);
 									autoResize(e);
 								}}
-								placeholder="Message text..."
+								placeholder={$t('chat.editMessagePlaceholder')}
 								rows="1"
 							></textarea>
 						{:else if di.type === 'reasoning'}
@@ -264,7 +265,7 @@
 									updateReasoningText(di.indices[0], (e.target as HTMLTextAreaElement).value);
 									autoResize(e);
 								}}
-								placeholder="Reasoning text..."
+								placeholder={$t('chat.editReasoningPlaceholder')}
 								rows="1"
 							></textarea>
 						{:else if di.type === 'function_call'}

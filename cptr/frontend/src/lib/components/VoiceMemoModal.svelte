@@ -7,6 +7,7 @@
 	import { writeFile } from '$lib/apis/files';
 	import { fetchJSON } from '$lib/apis';
 	import { transcribeEnabled, recordingQuality, QUALITY_BITRATES } from '$lib/stores/audio';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		workspace: string;
@@ -126,7 +127,7 @@
 			elapsed = 0;
 			timerInterval = window.setInterval(() => elapsed++, 1000);
 		} catch {
-			toast.error('Could not access microphone');
+			toast.error($t('voiceMemo.microphoneError'));
 			onclose();
 		}
 	}
@@ -164,7 +165,7 @@
 			await fetchJSON('/api/workspace/files/upload', { method: 'POST', body: form });
 			await clearFromIDB(id).catch(() => {});
 		} catch {
-			toast.error('Audio saved locally. Server upload failed.');
+			toast.error($t('voiceMemo.uploadFailed'));
 		}
 
 		// 3. Transcribe (if enabled)
@@ -181,7 +182,7 @@
 				transcript = '';
 				const msg = err?.message || '';
 				if (msg.includes('not configured')) {
-					toast.error('STT not configured. Set up in Settings → Audio.');
+					toast.error($t('voiceMemo.sttNotConfigured'));
 				}
 			}
 		}
@@ -214,7 +215,7 @@
 			phase = 'done';
 			setTimeout(onclose, 500);
 		} catch {
-			toast.error('Failed to write transcript. Audio is safe.');
+			toast.error($t('voiceMemo.writeFailed'));
 		}
 	}
 
@@ -258,17 +259,17 @@
 			<div class="flex items-center justify-end gap-3 mt-3">
 				<button
 					class="text-[13px] text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors"
-					onclick={cancel}>Cancel</button
+					onclick={cancel}>{$t('common.cancel')}</button
 				>
 				<button
 					class="text-[13px] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-100"
-					onclick={stop}>Done →</button
+					onclick={stop}>{$t('voiceMemo.done')}</button
 				>
 			</div>
 		{:else if phase === 'processing'}
 			<div class="flex items-center gap-2">
 				<Spinner size={12} />
-				<span class="text-xs text-gray-400 dark:text-gray-600">Processing…</span>
+				<span class="text-xs text-gray-400 dark:text-gray-600">{$t('voiceMemo.processing')}</span>
 			</div>
 		{:else if phase === 'naming'}
 			{#if transcript}
@@ -277,12 +278,12 @@
 				</p>
 			{/if}
 
-			<label class="text-[10px] text-gray-400 dark:text-gray-600">Filename</label>
+			<label class="text-[10px] text-gray-400 dark:text-gray-600">{$t('voiceMemo.filename')}</label>
 			<input
 				bind:this={filenameInput}
 				type="text"
 				bind:value={fileName}
-				placeholder="recording-name"
+				placeholder={$t('voiceMemo.filenamePlaceholder')}
 				autocomplete="off"
 				spellcheck="false"
 				class="block w-full bg-transparent text-[13px] text-gray-700 dark:text-gray-300 placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-none py-0.5"
@@ -296,11 +297,11 @@
 					onclick={save}
 					disabled={!fileName.trim()}
 					class="text-[13px] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-100 disabled:opacity-30 disabled:pointer-events-none"
-					>Save →</button
+					>{$t('common.save')} →</button
 				>
 			</div>
 		{:else if phase === 'done'}
-			<p class="text-xs text-gray-400 dark:text-gray-600">Saved ✓</p>
+			<p class="text-xs text-gray-400 dark:text-gray-600">{$t('voiceMemo.saved')}</p>
 		{/if}
 	</div>
 </Modal>

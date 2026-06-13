@@ -354,8 +354,8 @@
 					? 'bg-gray-200/50 text-gray-900 dark:bg-white/8 dark:text-white'
 					: 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
 				onclick={() => (showSplitMenu = !showSplitMenu)}
-				aria-label="Split Editor"
-				use:tooltip={'Split Editor'}
+				aria-label={$t('a11y.splitEditor')}
+				use:tooltip={$t('a11y.splitEditor')}
 			>
 				<Icon
 					name={$activeWorkspace?.splitDirection === 'vertical'
@@ -371,8 +371,8 @@
 			<button
 				class="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-100 shrink-0"
 				onclick={() => closeGroup(group.id)}
-				aria-label="Close pane"
-				use:tooltip={'Close pane'}
+				aria-label={$t('a11y.closePane')}
+				use:tooltip={$t('a11y.closePane')}
 			>
 				<Icon name="xmark" size={12} />
 			</button>

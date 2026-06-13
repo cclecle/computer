@@ -4,6 +4,7 @@
 	import { gitStatusStore, type GitStatus, type GitFile } from '$lib/stores/gitStatus.svelte';
 
 	import { tooltip } from '$lib/tooltip';
+	import { t } from '$lib/i18n';
 	import Icon from './Icon.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
@@ -309,8 +310,8 @@
 				class="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/6 dark:hover:text-gray-300"
 				onclick={() => refreshReview(false)}
 				disabled={refreshing}
-				aria-label="Refresh changes"
-				use:tooltip={'Refresh changes'}
+				aria-label={$t('a11y.refreshChanges')}
+				use:tooltip={$t('a11y.refreshChanges')}
 			>
 				<Icon name="refresh" size={12} class={refreshing ? 'animate-spin' : ''} />
 			</button>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tooltip } from '$lib/tooltip';
 	import Icon from '../Icon.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		content: string;
@@ -22,7 +23,7 @@
 	{#key iframeKey}
 		<iframe
 			src={serveUrl()}
-			title="HTML Preview"
+			title={$t('preview.htmlTitle')}
 			sandbox="allow-scripts allow-same-origin"
 			class="preview-iframe"
 		></iframe>

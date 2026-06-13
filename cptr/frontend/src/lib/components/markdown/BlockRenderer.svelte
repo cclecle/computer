@@ -4,6 +4,7 @@
 	import CodeBlock from './CodeBlock.svelte';
 	import MermaidBlock from './MermaidBlock.svelte';
 	import InlineRenderer from './InlineRenderer.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		tokens: Token[];
@@ -89,7 +90,7 @@
 			<div class="absolute top-1 right-1.5 invisible group-hover/table:visible flex gap-0.5">
 				<button
 					class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-white/8 transition-all duration-100"
-					title="Copy"
+					title={$t('common.copy')}
 					onclick={() => {
 						navigator.clipboard.writeText((token as Tokens.Table).raw?.trim() ?? '');
 					}}
@@ -111,11 +112,11 @@
 				</button>
 				<button
 					class="p-1 rounded text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-white/8 transition-all duration-100"
-					title="Download CSV"
+					title={$t('common.downloadCsv')}
 					onclick={() => {
-						const t = token as Tokens.Table;
-						const header = t.header.map((h) => `"${h.text.replace(/"/g, '""')}"`);
-						const rows = t.rows.map((r) => r.map((c) => `"${c.text.replace(/"/g, '""')}"`));
+						const tbl = token as Tokens.Table;
+						const header = tbl.header.map((h) => `"${h.text.replace(/"/g, '""')}"`);
+						const rows = tbl.rows.map((r) => r.map((c) => `"${c.text.replace(/"/g, '""')}"`));
 						const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
 						const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=UTF-8' });
 						const url = URL.createObjectURL(blob);

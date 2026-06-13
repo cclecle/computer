@@ -52,7 +52,7 @@
 			toast.success($t('settings.saved'));
 			refreshAudioState();
 		} catch {
-			toast.error('Failed to save audio settings');
+			toast.error($t('admin.audio.saveFailed'));
 		} finally {
 			saving = false;
 		}
@@ -60,53 +60,53 @@
 </script>
 
 <div class="flex flex-col min-h-full">
-	<h2 class="text-sm font-medium text-gray-900 dark:text-white mb-4">Audio</h2>
+	<h2 class="text-sm font-medium text-gray-900 dark:text-white mb-4">{$t('admin.audio.title')}</h2>
 
 	{#if loading}
 		<div class="flex justify-center py-8"><Spinner size={16} /></div>
 	{:else}
 		<!-- Voice Notes -->
-		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2">Voice Memos</h3>
+		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2">{$t('admin.audio.voiceMemos')}</h3>
 
 		<div class="flex flex-col gap-2.5">
 			<label class="flex items-center justify-between cursor-pointer">
-				<span class="text-xs text-gray-600 dark:text-gray-400">Enable Voice Memos</span>
+				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.enableVoiceMemos')}</span>
 				<ToggleSwitch value={voiceMemosEnabled} onchange={(v) => { voiceMemosEnabled = v; }} />
 			</label>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				Record voice memos from the "+" menu.
+				{$t('admin.audio.voiceMemosHint')}
 			</p>
 
 			<label class="flex items-center justify-between cursor-pointer">
-				<span class="text-xs text-gray-600 dark:text-gray-400">Auto-transcribe</span>
+				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.autoTranscribe')}</span>
 				<ToggleSwitch value={transcribeEnabled} onchange={(v) => { transcribeEnabled = v; }} />
 			</label>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				{transcribeEnabled ? 'Recordings are transcribed to markdown via STT.' : 'Recordings are saved as audio only.'}
+				{transcribeEnabled ? $t('admin.audio.transcribeOnHint') : $t('admin.audio.transcribeOffHint')}
 			</p>
 
 			<div class="flex items-center justify-between">
-				<span class="text-xs text-gray-600 dark:text-gray-400">Recording quality</span>
+				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.recordingQuality')}</span>
 				<select
 					bind:value={quality}
 					class="bg-transparent text-xs text-gray-600 dark:text-gray-400 outline-none cursor-pointer"
 				>
-					<option value="high">High (128kbps)</option>
-					<option value="medium">Medium (64kbps)</option>
-					<option value="low">Low (32kbps)</option>
+					<option value="high">{$t('admin.audio.qualityHigh')}</option>
+					<option value="medium">{$t('admin.audio.qualityMedium')}</option>
+					<option value="low">{$t('admin.audio.qualityLow')}</option>
 				</select>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				{quality === 'high' ? 'Best quality, larger files.' : quality === 'medium' ? 'Balanced quality and size.' : 'Smallest files, optimized for speech.'}
+				{quality === 'high' ? $t('admin.audio.qualityHintHigh') : quality === 'medium' ? $t('admin.audio.qualityHintMedium') : $t('admin.audio.qualityHintLow')}
 			</p>
 		</div>
 
 		<!-- Speech-to-Text -->
-		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">Speech-to-Text</h3>
+		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">{$t('admin.audio.stt')}</h3>
 
 		<div class="flex flex-col gap-2.5">
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-base-url">Base URL</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-base-url">{$t('connections.baseUrl')}</label>
 				<input
 					id="stt-base-url"
 					type="text"
@@ -116,7 +116,7 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-api-key">API Key</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-api-key">{$t('connections.apiKey')}</label>
 				<input
 					id="stt-api-key"
 					type="password"
@@ -126,7 +126,7 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-model">Model</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-model">{$t('automations.model')}</label>
 				<input
 					id="stt-model"
 					type="text"
@@ -136,7 +136,7 @@
 				/>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600">
-				Compatible with OpenAI's audio/transcriptions API.
+				{$t('admin.audio.sttHint')}
 			</p>
 		</div>
 

@@ -116,7 +116,7 @@
 						<button
 							class="cursor-pointer"
 							onclick={() => startRecording(actionId)}
-							title="Click to rebind"
+							title={$t('keyboard.clickToRebind')}
 						>
 							<KeyPill text={formatChord(chord)} />
 						</button>

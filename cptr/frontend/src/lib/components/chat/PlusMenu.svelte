@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { toolApprovalMode, planMode, requestParams, type ToolApprovalMode } from '$lib/stores';
 	import { tooltip } from '$lib/tooltip';
+	import { t } from '$lib/i18n';
 	import Icon from '../Icon.svelte';
 	import ToggleSwitch from '../common/ToggleSwitch.svelte';
 
@@ -20,14 +21,14 @@
 	let pos = $state<{ x: number; bottom: number }>({ x: -9999, bottom: -9999 });
 	let ready = $state(false);
 
-	const modes: { value: ToolApprovalMode; label: string; desc: string }[] = [
-		{ value: 'ask', label: 'Ask for approval', desc: 'Confirm each tool call before it runs' },
-		{ value: 'auto', label: 'Auto-approve', desc: 'Approve safe actions, ask for risky ones' },
-		{ value: 'full', label: 'Full access', desc: 'All tool calls run without confirmation' }
-	];
+	const modes: { value: ToolApprovalMode; label: string; desc: string }[] = $derived([
+		{ value: 'ask', label: $t('plusMenu.askApproval'), desc: $t('plusMenu.askApprovalDesc') },
+		{ value: 'auto', label: $t('plusMenu.autoApprove'), desc: $t('plusMenu.autoApproveDesc') },
+		{ value: 'full', label: $t('plusMenu.fullAccess'), desc: $t('plusMenu.fullAccessDesc') }
+	]);
 
 	const currentModeLabel = $derived(
-		modes.find((m) => m.value === $toolApprovalMode)?.label ?? 'Tool permissions'
+		modes.find((m) => m.value === $toolApprovalMode)?.label ?? $t('plusMenu.toolPermissions')
 	);
 
 	// ── Request params state ────────────────────────
@@ -254,7 +255,7 @@
 							d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"
 						/>
 					</svg>
-					<span class="flex-1 text-left truncate">Attach files</span>
+					<span class="flex-1 text-left truncate">{$t('plusMenu.attachFiles')}</span>
 				</button>
 
 				<button
@@ -273,7 +274,7 @@
 						<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
 						<circle cx="12" cy="13" r="4" />
 					</svg>
-					<span class="flex-1 text-left truncate">Capture</span>
+					<span class="flex-1 text-left truncate">{$t('plusMenu.capture')}</span>
 				</button>
 
 				<div class="h-px bg-gray-100/50 dark:bg-white/3 mx-1 my-0.5"></div>
@@ -297,7 +298,7 @@
 						<line x1="9" y1="13" x2="15" y2="13" />
 						<line x1="9" y1="17" x2="15" y2="17" />
 					</svg>
-					<span class="flex-1 text-left truncate">Plan mode</span>
+					<span class="flex-1 text-left truncate">{$t('plusMenu.planMode')}</span>
 					<ToggleSwitch value={$planMode} onchange={(v) => planMode.set(v)} />
 				</button>
 
@@ -308,7 +309,7 @@
 					onclick={() => (tab = 'tools')}
 				>
 					<Icon name="shield" size={14} />
-					<span class="flex-1 text-left truncate">Tool permissions</span>
+					<span class="flex-1 text-left truncate">{$t('plusMenu.toolPermissions')}</span>
 					<span class="text-[10px] text-gray-400 dark:text-gray-500 truncate max-w-16"
 						>{currentModeLabel}</span
 					>
@@ -333,7 +334,7 @@
 						<circle cx="12" cy="12" r="3" />
 						<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
 					</svg>
-					<span class="flex-1 text-left truncate">Parameters</span>
+					<span class="flex-1 text-left truncate">{$t('plusMenu.parameters')}</span>
 					{#if paramCount > 0}
 						<span class="text-[10px] text-gray-400 dark:text-gray-500">{paramCount}</span>
 					{/if}
@@ -348,7 +349,7 @@
 					onclick={() => (tab = '')}
 				>
 					<Icon name="chevron-left" size={12} />
-					<span class="flex-1 text-left font-medium">Tool permissions</span>
+					<span class="flex-1 text-left font-medium">{$t('plusMenu.toolPermissions')}</span>
 				</button>
 
 				<div class="h-px bg-gray-100/50 dark:bg-white/3 mx-1 my-0.5"></div>
@@ -387,20 +388,20 @@
 					onclick={() => (tab = '')}
 				>
 					<Icon name="chevron-left" size={12} />
-					<span class="flex-1 text-left font-medium">Parameters</span>
+					<span class="flex-1 text-left font-medium">{$t('plusMenu.parameters')}</span>
 				</button>
 
 				<div class="h-px bg-gray-100/50 dark:bg-white/3 mx-1 my-0.5"></div>
 
 				{#if paramRows.length === 0}
-					<p class="px-2 h-7 flex items-center justify-center text-[11px] text-gray-400 dark:text-gray-500">No parameters configured</p>
+					<p class="px-2 h-7 flex items-center justify-center text-[11px] text-gray-400 dark:text-gray-500">{$t('plusMenu.noParams')}</p>
 				{:else}
 					<div class="px-0.5 py-0.5 flex flex-col max-h-48 overflow-y-auto">
 						{#each paramRows as row, i}
 							<div class="group/row flex items-center gap-1 px-1.5 h-6">
 								<input
 									type="text"
-									placeholder="key"
+									placeholder={$t('plusMenu.paramKey')}
 									bind:value={row.key}
 									onblur={syncParams}
 									autocomplete="off"
@@ -409,7 +410,7 @@
 								/>
 								<input
 									type="text"
-									placeholder="value"
+									placeholder={$t('plusMenu.paramValue')}
 									bind:value={row.value}
 									onblur={syncParams}
 									autocomplete="off"
@@ -420,7 +421,7 @@
 									type="button"
 									onclick={() => removeParamRow(i)}
 									class="shrink-0 text-gray-300 dark:text-gray-700 opacity-0 group-hover/row:opacity-100 hover:text-gray-500 dark:hover:text-gray-400 transition-colors duration-75"
-									aria-label="Remove parameter"
+									aria-label={$t('plusMenu.removeParam')}
 								>
 									<Icon name="xmark" size={8} />
 								</button>
@@ -435,7 +436,7 @@
 					disabled={!canAddParam}
 				>
 					<Icon name="plus" size={12} />
-					<span class="flex-1 text-left">Add parameter</span>
+					<span class="flex-1 text-left">{$t('plusMenu.addParam')}</span>
 				</button>
 			</div>
 		{/if}

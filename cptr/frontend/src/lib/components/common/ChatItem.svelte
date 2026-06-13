@@ -6,6 +6,7 @@
 	 */
 	import type { ChatInfo } from '$lib/apis/chat';
 	import Spinner from './Spinner.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		chat: ChatInfo;
@@ -50,7 +51,7 @@
 		<button
 			class="flex items-center justify-center w-5 h-5 rounded shrink-0 text-gray-300 dark:text-gray-700 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-200 dark:hover:bg-white/8 transition-all duration-75"
 			onclick={(e) => { e.stopPropagation(); onmenu?.(e); }}
-			aria-label="Chat options"
+			aria-label={$t('a11y.chatOptions')}
 		>
 			<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
 				<circle cx="3" cy="8" r="1.5" />

@@ -5,6 +5,7 @@
 		onpagechange: (page: number) => void;
 	}
 	let { page, totalPages, onpagechange }: Props = $props();
+	import { t } from '$lib/i18n';
 
 	// Build page numbers with ellipsis for large page counts
 	const pages = $derived.by((): (number | 'ellipsis')[] => {
@@ -28,7 +29,7 @@
 			class="pagination-btn"
 			disabled={page <= 1}
 			onclick={() => onpagechange(page - 1)}
-			aria-label="Previous page"
+			aria-label={$t('a11y.prevPage')}
 		>
 			<svg
 				width="12"
@@ -64,7 +65,7 @@
 			class="pagination-btn"
 			disabled={page >= totalPages}
 			onclick={() => onpagechange(page + 1)}
-			aria-label="Next page"
+			aria-label={$t('a11y.nextPage')}
 		>
 			<svg
 				width="12"

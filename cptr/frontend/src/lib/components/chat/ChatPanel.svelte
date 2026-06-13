@@ -39,6 +39,7 @@
 	import ChatHistory from './ChatHistory.svelte';
 	import Spinner from '../common/Spinner.svelte';
 	import { toast } from 'svelte-sonner';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		workspace: string;
@@ -886,7 +887,7 @@
 					bind:selectedModel
 					{sending}
 					{workspace}
-					placeholder="Ask anything about {workspaceName}..."
+					placeholder={$t('chat.placeholder', { name: workspaceName })}
 					onsend={send}
 					{queuedMessages}
 					onqueuesendnow={handleQueueSendNow}
@@ -963,7 +964,7 @@
 								autoScroll = true;
 								scrollToBottom();
 							}}
-							aria-label="Scroll to bottom"
+							aria-label={$t('chat.scrollToBottom')}
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"

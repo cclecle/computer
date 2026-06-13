@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fetchHandler } from '$lib/apis';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import { t } from '$lib/i18n';
 
 	interface Props {
 		src: string;
@@ -62,7 +63,7 @@
 		sheetHtmls = workbook.SheetNames.map((name) => {
 			const sheet = workbook.Sheets[name];
 			const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-			if (rows.length === 0) return '<p>Empty sheet</p>';
+			if (rows.length === 0) return `<p>${$t('preview.emptySheet')}</p>`;
 
 			const colCount = rows.reduce((max, row) => Math.max(max, row.length), 0);
 			const colLetter = (i: number) => {
