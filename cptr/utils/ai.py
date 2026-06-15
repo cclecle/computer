@@ -343,14 +343,18 @@ async def stream_anthropic(
 
 
 def _to_openai_messages(messages: list[dict], instructions: str) -> list[dict]:
-    """Canonical messages → OpenAI Chat Completions format."""
+    """Canonical messages → OpenAI Chat Completions format.
+
+    Strips non-standard fields (reasoning_items, fc_id in tool_calls)
+    that are used internally but would cause 400 errors from OpenAI.
+    """
     result = []
     if instructions:
         result.append({"role": "system", "content": instructions})
     for m in messages:
         if m["role"] == "system":
             continue
-        
+
         content = m.get("content", "")
         if isinstance(content, list):
             formatted_content = []
@@ -368,9 +372,20 @@ def _to_openai_messages(messages: list[dict], instructions: str) -> list[dict]:
                     })
             new_m = dict(m)
             new_m["content"] = formatted_content
+            # Strip non-standard fields
+            new_m.pop("reasoning_items", None)
             result.append(new_m)
         else:
-            result.append(m)
+            out = dict(m)
+            # Strip non-standard fields that are only for Responses API
+            out.pop("reasoning_items", None)
+            # Clean tool_calls: remove fc_id which is Responses-API-only
+            if "tool_calls" in out:
+                out["tool_calls"] = [
+                    {k: v for k, v in tc.items() if k != "fc_id"}
+                    for tc in out["tool_calls"]
+                ]
+            result.append(out)
     return result
 
 
@@ -414,6 +429,9 @@ async def stream_openai_completions(
                     "POST", f"{url}/chat/completions", json=body, headers=headers
                 ) as resp:
                     logger.info("[stream] openai completions status=%s", resp.status_code)
+                    if resp.status_code >= 400:
+                        error_body = await resp.aread()
+                        logger.error("[stream] openai completions error body: %s", error_body.decode(errors="replace"))
                     resp.raise_for_status()
                     tool_calls: dict[int, dict] = {}
                     async for line in resp.aiter_lines():

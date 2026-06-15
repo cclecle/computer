@@ -669,10 +669,16 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
                 pass
             else:
                 for ti, turn in enumerate(turns):
-                    if turn["calls"]:
+                    # Filter calls to only those with matching outputs
+                    turn_output_ids = {o["call_id"] for o in turn["outputs"]}
+                    matched_calls = [
+                        tc for tc in turn["calls"]
+                        if tc["id"] in turn_output_ids
+                    ]
+                    if matched_calls:
                         if ti == 0:
                             # First turn: attach to the existing entry
-                            entry["tool_calls"] = turn["calls"]
+                            entry["tool_calls"] = matched_calls
                             if turn["reasoning"]:
                                 entry["reasoning_items"] = turn["reasoning"]
                         else:
@@ -680,7 +686,7 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
                             entry = {
                                 "role": "assistant",
                                 "content": "",
-                                "tool_calls": turn["calls"],
+                                "tool_calls": matched_calls,
                             }
                             if turn["reasoning"]:
                                 entry["reasoning_items"] = turn["reasoning"]
@@ -693,7 +699,74 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
                         }
 
         result.append(entry)
+
+    # ── Final sanitization: ensure every tool_call has a matching tool result ──
+    # This catches edge cases from compaction, DB corruption, or partial persistence.
+    result = _sanitize_tool_pairs(result)
+
     return result, existing_summary
+
+
+def _sanitize_tool_pairs(messages: list[dict]) -> list[dict]:
+    """Ensure every tool_call in an assistant message has a matching tool result.
+
+    Walks the message list and collects all tool result call_ids.  Then
+    strips any tool_call entries from assistant messages that have no
+    matching result.  Also removes orphaned tool-result messages.
+
+    This is the last line of defence against 400 errors from providers
+    that require strict tool_call ↔ tool_result pairing (OpenAI).
+    """
+    # Collect all tool-result call_ids in the conversation
+    tool_result_ids = {
+        m["tool_call_id"]
+        for m in messages
+        if m.get("role") == "tool" and m.get("tool_call_id")
+    }
+
+    # Collect all tool_call ids declared by assistant messages
+    tool_call_ids = set()
+    for m in messages:
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            for tc in m["tool_calls"]:
+                tool_call_ids.add(tc.get("id", ""))
+
+    sanitized = []
+    for m in messages:
+        if m.get("role") == "assistant" and m.get("tool_calls"):
+            # Keep only tool_calls that have a matching tool result
+            kept = [tc for tc in m["tool_calls"] if tc.get("id") in tool_result_ids]
+            dropped = len(m["tool_calls"]) - len(kept)
+            if dropped:
+                logger.warning(
+                    "[sanitize] Dropped %d orphaned tool_call(s) from assistant message",
+                    dropped,
+                )
+            if kept:
+                m = dict(m)
+                m["tool_calls"] = kept
+                sanitized.append(m)
+            else:
+                # No tool_calls left — keep as plain text if there's content
+                m = dict(m)
+                del m["tool_calls"]
+                m.pop("reasoning_items", None)
+                if m.get("content"):
+                    sanitized.append(m)
+                # else: drop empty assistant message entirely
+        elif m.get("role") == "tool":
+            # Drop tool results that have no matching tool_call
+            if m.get("tool_call_id") not in tool_call_ids:
+                logger.warning(
+                    "[sanitize] Dropped orphaned tool result for call_id=%s",
+                    m.get("tool_call_id", "?"),
+                )
+                continue
+            sanitized.append(m)
+        else:
+            sanitized.append(m)
+
+    return sanitized
 
 
 def _parse_image_data_uri(result: str) -> tuple[str, str] | None:
