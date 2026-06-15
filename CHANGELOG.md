@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-06-15
+
+### Fixed
+
+- 📱 **Mobile keyboard no longer covers the chat.** On iOS and mobile browsers, opening the on-screen keyboard could push content behind it or clip the bottom of the screen. The layout now properly adjusts to keep everything visible above the keyboard.
+- 🗑️ **Discarding staged files works correctly.** Previously, discarding a file that was already staged (added to a commit) could leave it in a broken state. Staged changes are now properly unstaged and cleaned up in one step.
+- 🔄 **Git file list no longer flickers when staging.** Toggling a file between staged and unstaged could briefly cause a visual glitch where the list jumped. The file list now updates smoothly.
+
+### Improved
+
+- 📋 **Dropdown menus stay on screen.** Dropdown menus (like the model picker) now correctly reposition themselves to stay within the visible area, especially when the keyboard is open or on smaller screens.
+- 📖 **README updated with badges and clearer tunnel docs.** Added project badges (stars, language, Discord) to the top of the README, and clarified the remote access / tunnel instructions.
+
 ## [0.4.8] - 2026-06-15
 
 ### Fixed
