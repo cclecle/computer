@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-06-15
+
+### Fixed
+
+- 🛡️ **Chat no longer breaks after crashes or interruptions.** If a previous session ended unexpectedly, leftover data could cause permanent errors when resuming a conversation. The chat now automatically cleans up mismatched data on load so you can always pick up where you left off.
+- 🔄 **Better compatibility with OpenAI models.** Fixed issues where certain internal data was accidentally sent to OpenAI, causing requests to fail. Conversations with tool use now work reliably across all supported providers.
+- 🪵 **Clearer error reporting for AI requests.** When an AI request fails, the error details are now logged properly instead of being silently swallowed, making issues easier to diagnose.
+
 ## [0.4.6] - 2026-06-15
 
 ### Added
