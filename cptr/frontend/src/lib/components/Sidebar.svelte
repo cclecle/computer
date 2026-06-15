@@ -11,8 +11,6 @@
 		appVersion,
 		showChangelog,
 		showSearch,
-		openChatTab,
-		setActiveTab
 	} from '$lib/stores';
 	import { get } from 'svelte/store';
 	import Sortable from 'sortablejs';
@@ -106,23 +104,7 @@
 	}
 
 	function handleShowMoreChats(wsPath: string) {
-		goto(`/?workspace=${encodeURIComponent(wsPath)}`);
-
-		const ws = get(currentWorkspace);
-		if (ws) {
-			for (const group of ws.groups) {
-				const existing = group.tabs.find(
-					(t) => t.type === 'chat' && (t.path?.startsWith('new-') || t.path?.startsWith('pending-'))
-				);
-				if (existing) {
-					setActiveTab(existing.id, group.id);
-					if (typeof window !== 'undefined' && window.innerWidth < 768) sidebarOpen.set(false);
-					return;
-				}
-			}
-		}
-
-		openChatTab();
+		goto(`/?workspace=${encodeURIComponent(wsPath)}&chatId`);
 		if (typeof window !== 'undefined' && window.innerWidth < 768) {
 			sidebarOpen.set(false);
 		}
