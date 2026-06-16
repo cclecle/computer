@@ -21,6 +21,7 @@ export const ttsEnabled = writable<boolean>(false);
 export const ttsConfigured = writable<boolean>(false);
 export const ttsVoice = writable<string>('alloy');
 export const ttsFormat = writable<string>('mp3');
+export const ttsPlaybackSpeed = writable<number>(1);
 export const voiceModeEnabled = writable<boolean>(false);
 export const voiceModeSttMode = writable<'browser' | 'provider'>('browser');
 export const ttsPlaybackEnabled = writable<boolean>(
@@ -33,9 +34,16 @@ const SILENT_WAV =
 let ttsAudioElement: HTMLAudioElement | null = null;
 let ttsAudioContext: AudioContext | null = null;
 let ttsAudioUnlocked = false;
+let ttsAudioUseToken = 0;
+let currentTtsPlaybackSpeed = 1;
 
 ttsPlaybackEnabled.subscribe((v) => {
 	if (typeof localStorage !== 'undefined') localStorage.setItem('ttsPlaybackEnabled', String(v));
+});
+
+ttsPlaybackSpeed.subscribe((v) => {
+	currentTtsPlaybackSpeed = Number.isFinite(v) ? Math.min(Math.max(v, 0.5), 2) : 1;
+	if (ttsAudioElement) ttsAudioElement.playbackRate = currentTtsPlaybackSpeed;
 });
 
 export function getTtsAudioElement(): HTMLAudioElement | null {
@@ -44,8 +52,21 @@ export function getTtsAudioElement(): HTMLAudioElement | null {
 		ttsAudioElement = new Audio();
 		ttsAudioElement.preload = 'auto';
 		(ttsAudioElement as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+		ttsAudioElement.playbackRate = currentTtsPlaybackSpeed;
 	}
 	return ttsAudioElement;
+}
+
+export function setTtsAudioPlaybackSource(src: string): HTMLAudioElement | null {
+	const audio = getTtsAudioElement();
+	if (!audio) return null;
+	ttsAudioUseToken += 1;
+	audio.pause();
+	audio.volume = 1;
+	audio.muted = false;
+	audio.playbackRate = currentTtsPlaybackSpeed;
+	audio.src = src;
+	return audio;
 }
 
 export async function unlockTtsAudioPlayback() {
@@ -69,8 +90,10 @@ export async function unlockTtsAudioPlayback() {
 	const audio = getTtsAudioElement();
 	if (audio && !ttsAudioUnlocked) {
 		try {
+			const unlockToken = ++ttsAudioUseToken;
 			audio.src = SILENT_WAV;
 			audio.volume = 0;
+			audio.playbackRate = 1;
 			const started = audio.play();
 			unlocks.push(
 				Promise.resolve(started)
@@ -78,11 +101,13 @@ export async function unlockTtsAudioPlayback() {
 						ttsAudioUnlocked = true;
 					})
 					.finally(() => {
+						if (unlockToken !== ttsAudioUseToken) return;
 						audio.pause();
 						audio.currentTime = 0;
 						audio.removeAttribute('src');
 						audio.load();
 						audio.volume = 1;
+						audio.playbackRate = currentTtsPlaybackSpeed;
 					})
 			);
 		} catch {}
@@ -102,6 +127,7 @@ export async function refreshAudioState() {
 			tts_configured: boolean;
 			tts_voice: string;
 			tts_format: string;
+			tts_playback_speed?: number;
 			voice_mode_stt_mode?: string;
 		}>('/api/audio/state');
 		voiceMemosEnabled.set(data.voice_memos_enabled === true);
@@ -114,12 +140,15 @@ export async function refreshAudioState() {
 		ttsConfigured.set(data.tts_configured === true);
 		ttsVoice.set(data.tts_voice || 'alloy');
 		ttsFormat.set(data.tts_format || 'mp3');
+		const speed = Number(data.tts_playback_speed);
+		ttsPlaybackSpeed.set(Number.isFinite(speed) ? Math.min(Math.max(speed, 0.5), 2) : 1);
 		voiceModeSttMode.set(data.voice_mode_stt_mode === 'provider' ? 'provider' : 'browser');
 	} catch {
 		voiceMemosEnabled.set(false);
 		sttConfigured.set(false);
 		ttsEnabled.set(false);
 		ttsConfigured.set(false);
+		ttsPlaybackSpeed.set(1);
 		voiceModeSttMode.set('browser');
 	}
 }

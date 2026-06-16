@@ -480,6 +480,7 @@
 	"admin.audio.ttsKeyPlaceholder": "Leave blank to reuse STT key",
 	"admin.audio.ttsVoice": "Voice",
 	"admin.audio.ttsFormat": "Format",
+	"admin.audio.ttsPlaybackSpeed": "Playback speed",
 	"admin.audio.ttsHint": "Compatible with OpenAI's audio/speech API. If no TTS key is set, the STT key is reused.",
 	"admin.audio.voiceMode": "Voice Mode",
 	"admin.audio.voiceModeSttMode": "Speech recognition",

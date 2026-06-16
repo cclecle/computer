@@ -54,6 +54,7 @@ class AudioStateResponse(BaseModel):
     tts_configured: bool
     tts_voice: str
     tts_format: str
+    tts_playback_speed: float
     voice_mode_stt_mode: str
 
 
@@ -200,6 +201,12 @@ async def audio_state(request: Request):
     quality = await Config.get("audio.recording_quality")
     if quality not in ("high", "medium", "low"):
         quality = "high"
+    playback_speed = await Config.get("audio.tts_playback_speed")
+    try:
+        playback_speed = float(playback_speed)
+    except (TypeError, ValueError):
+        playback_speed = 1.0
+    playback_speed = min(max(playback_speed, 0.5), 2.0)
 
     return AudioStateResponse(
         voice_memos_enabled=await Config.get("audio.voice_memos_enabled") is True,
@@ -210,6 +217,7 @@ async def audio_state(request: Request):
         tts_configured=bool(tts_key or stt_key),
         tts_voice=str((await Config.get("audio.tts_voice")) or "alloy"),
         tts_format=str((await Config.get("audio.tts_format")) or "mp3"),
+        tts_playback_speed=playback_speed,
         voice_mode_stt_mode=str((await Config.get("audio.voice_mode_stt_mode")) or "browser"),
     )
 
@@ -495,11 +503,15 @@ async def speech(body: SpeechRequest, request: Request):
         cache_json_path = cache_dir / f"{key}.json"
         if cache_audio_path.exists():
             try:
-                return Response(
-                    content=cache_audio_path.read_bytes(),
-                    media_type=_audio_media_type(str(fmt)),
-                    headers={"X-CPTR-Audio-Cache": "hit"},
-                )
+                if cache_audio_path.stat().st_size <= 0:
+                    cache_audio_path.unlink(missing_ok=True)
+                    cache_json_path.unlink(missing_ok=True)
+                else:
+                    return Response(
+                        content=cache_audio_path.read_bytes(),
+                        media_type=_audio_media_type(str(fmt)),
+                        headers={"X-CPTR-Audio-Cache": "hit"},
+                    )
             except OSError:
                 pass
 
@@ -521,6 +533,10 @@ async def speech(body: SpeechRequest, request: Request):
     except httpx.ConnectError:
         raise HTTPException(502, "Could not connect to TTS API")
 
+    if not resp.content:
+        raise HTTPException(502, "TTS API returned empty audio.")
+
+    cache_state = "disabled"
     if cache_audio_path and cache_json_path:
         _write_bytes_atomic(cache_audio_path, resp.content)
         _write_json_atomic(
@@ -536,5 +552,10 @@ async def speech(body: SpeechRequest, request: Request):
                 "content_type": _audio_media_type(str(fmt)),
             },
         )
+        cache_state = "write"
 
-    return Response(content=resp.content, media_type=_audio_media_type(str(fmt)))
+    return Response(
+        content=resp.content,
+        media_type=_audio_media_type(str(fmt)),
+        headers={"X-CPTR-Audio-Cache": cache_state},
+    )

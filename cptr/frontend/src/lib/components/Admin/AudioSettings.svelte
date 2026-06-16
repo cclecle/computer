@@ -24,6 +24,7 @@
 	let ttsModel = $state('tts-1');
 	let ttsVoice = $state('alloy');
 	let ttsFormat = $state('mp3');
+	let ttsPlaybackSpeed = $state(1);
 	let hasExistingTtsKey = $state(false);
 	let voiceModeSystemPrompt = $state('');
 	let voiceModeSttMode = $state<'browser' | 'provider'>('browser');
@@ -46,6 +47,8 @@
 			ttsModel = (config['audio.tts_model'] as string) || 'tts-1';
 			ttsVoice = (config['audio.tts_voice'] as string) || 'alloy';
 			ttsFormat = (config['audio.tts_format'] as string) || 'mp3';
+			const speed = Number(config['audio.tts_playback_speed']);
+			ttsPlaybackSpeed = Number.isFinite(speed) ? Math.min(Math.max(speed, 0.5), 2) : 1;
 			hasExistingTtsKey = !!config['audio.tts_api_key'];
 			voiceModeSystemPrompt = (config['audio.voice_mode_system_prompt'] as string) || '';
 			voiceModeSttMode =
@@ -68,6 +71,7 @@
 				'audio.tts_model': ttsModel,
 				'audio.tts_voice': ttsVoice,
 				'audio.tts_format': ttsFormat,
+				'audio.tts_playback_speed': ttsPlaybackSpeed,
 				'audio.voice_mode_system_prompt': voiceModeSystemPrompt,
 				'audio.voice_mode_stt_mode': voiceModeSttMode
 			};
@@ -235,6 +239,23 @@
 					<option value="wav">WAV</option>
 					<option value="pcm">PCM</option>
 				</select>
+			</div>
+			<div class="flex items-center justify-between gap-3">
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-playback-speed">
+					{$t('admin.audio.ttsPlaybackSpeed')}
+				</label>
+				<div class="flex items-center gap-2">
+					<input
+						id="tts-playback-speed"
+						type="range"
+						min="0.5"
+						max="2"
+						step="0.05"
+						bind:value={ttsPlaybackSpeed}
+						class="w-28 accent-gray-700 dark:accent-gray-300"
+					/>
+					<span class="w-9 text-right text-xs text-gray-500 dark:text-gray-400">{ttsPlaybackSpeed.toFixed(2)}x</span>
+				</div>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600">
 				{$t('admin.audio.ttsHint')}
