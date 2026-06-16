@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-16
+
+### Added
+
+- 🎚️ **TTS playback speed control.** You can now adjust how fast the AI reads responses aloud. A new speed slider in Settings > Audio lets you pick anything from 0.5x to 2x. Your preference syncs across devices.
+
+### Fixed
+
+- 📱 **TTS no longer silently fails on mobile.** On iOS and other mobile browsers, audio playback could fail because the browser requires a user gesture before playing sound. Entering voice mode now "unlocks" the audio system with a silent tap so speech plays reliably from the first message.
+- 🛡️ **Empty audio responses no longer break playback.** If the TTS provider returned an empty file, the player would get stuck and stop reading. Empty responses are now caught and reported as errors, and corrupted cache entries are cleaned up automatically.
+- ⚡ **Faster first sentence.** The text-to-speech system now starts speaking sooner by splitting the first sentence at a shorter boundary, so you hear the beginning of a response more quickly.
+- 🔄 **Smoother audio prefetching.** Instead of requesting all upcoming sentences at once, the player now fetches up to two ahead at a time. This avoids flooding the TTS API with requests and keeps playback steady on slower connections.
+
 ## [0.5.0] - 2026-06-16
 
 ### Added
