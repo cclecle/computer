@@ -1,6 +1,6 @@
 # Manifesto
 
-> **TL;DR** `cptr` runs on your machine and serves your whole computer (files, terminal, editor, git) to any browser. Phone, tablet, laptop, another computer, even the one it's running on. Designed to feel native on every screen. Plug in an AI that can actually read, write, and run things on your machine, or bring your favourite terminal agent. Terminal multiplexer, coding agent, full workstation, one tool, any device.
+> **TL;DR** `cptr` runs on your machine and serves your whole computer (files, terminal, editor, git) to any browser. Phone, tablet, laptop, another computer, even the one it's running on. Designed to feel native on every screen. Plug in an AI that can actually read, write, and run things on your machine, or bring your favourite terminal agent. Terminal multiplexer, parallel AI agents, full workstation, one tool, any device.
 
 A developer moves to Portugal for the light. She works remotely for a company in New York. The commute is gone. The office is gone. Her apartment has a terrace with bougainvillea and a view of the Tagus. She sits at a desk in a dark room for eight hours and sees the river between pull requests.
 
