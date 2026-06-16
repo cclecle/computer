@@ -50,6 +50,12 @@
 	import { toast } from 'svelte-sonner';
 	import { t } from '$lib/i18n';
 
+	type PreparedTtsAudio = {
+		promise: Promise<Blob>;
+		controller: AbortController;
+		generation: number;
+	};
+
 	interface Props {
 		workspace: string;
 		chatId?: string;
@@ -74,7 +80,6 @@
 	let ttsInsideCodeFence = false;
 	let ttsPlaying = false;
 	let ttsGeneration = 0;
-	let ttsAbort: AbortController | null = null;
 	let ttsAudio: HTMLAudioElement | null = null;
 	let ttsObjectUrl: string | null = null;
 	let ttsErrorShown = false;
@@ -85,6 +90,7 @@
 	// for cross-session reuse and the workspace data flywheel.
 	let ttsAudioCacheBytes = 0;
 	const ttsAudioCache = new Map<string, Blob>();
+	const ttsPreparedAudio = new Map<string, PreparedTtsAudio>();
 	const TTS_AUDIO_CACHE_LIMIT_BYTES = 20 * 1024 * 1024;
 
 	// ── Windowed rendering ──────────────────────────────────────
@@ -951,8 +957,8 @@
 		ttsGeneration += 1;
 		ttsQueue = [];
 		resetTtsBuffer();
-		ttsAbort?.abort();
-		ttsAbort = null;
+		for (const pending of ttsPreparedAudio.values()) pending.controller.abort();
+		ttsPreparedAudio.clear();
 		if (ttsAudio) {
 			ttsAudio.pause();
 			ttsAudio.src = '';
@@ -1035,6 +1041,7 @@
 
 	function enqueueSpeech(text: string) {
 		ttsQueue = [...ttsQueue, text];
+		void prepareTtsAudio(text, ttsGeneration);
 		if (!ttsPlaying) void playTtsQueue(ttsGeneration);
 	}
 
@@ -1106,7 +1113,58 @@
 		ttsAudioCacheBytes += blob.size;
 	}
 
+	async function readTtsError(response: Response): Promise<string> {
+		try {
+			const data = await response.json();
+			return data?.detail || data?.error || `${response.status}`;
+		} catch {
+			return `${response.status}`;
+		}
+	}
+
+	function showTtsFailure(detail: string) {
+		if (!ttsErrorShown) {
+			ttsErrorShown = true;
+			toast.error($t('admin.audio.tts') + ': ' + detail);
+		}
+		ttsPlaybackEnabled.set(false);
+		voiceModeEnabled.set(false);
+	}
+
+	function prepareTtsAudio(text: string, generation: number): Promise<Blob> {
+		const cacheKey = ttsCacheKey(text);
+		const cached = getCachedTtsAudio(cacheKey);
+		if (cached) return Promise.resolve(cached);
+
+		const existing = ttsPreparedAudio.get(cacheKey);
+		if (existing && existing.generation === generation) return existing.promise;
+		if (existing) existing.controller.abort();
+
+		const controller = new AbortController();
+		let promise!: Promise<Blob>;
+		promise = fetch('/api/audio/speech', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ text, voice: $ttsVoice, workspace }),
+			signal: controller.signal
+		})
+			.then(async (response) => {
+				if (!response.ok) throw new Error(await readTtsError(response));
+				const blob = await response.blob();
+				cacheTtsAudio(cacheKey, blob);
+				return blob;
+			})
+			.finally(() => {
+				const current = ttsPreparedAudio.get(cacheKey);
+				if (current?.promise === promise) ttsPreparedAudio.delete(cacheKey);
+			});
+		void promise.catch(() => {});
+		ttsPreparedAudio.set(cacheKey, { promise, controller, generation });
+		return promise;
+	}
+
 	async function playTtsQueue(generation: number) {
+		ttsStopRequested = false;
 		ttsPlaying = true;
 		try {
 			while (generation === ttsGeneration && ttsQueue.length > 0) {
@@ -1114,33 +1172,7 @@
 				const text = ttsQueue.shift();
 				if (!text) continue;
 
-				const cacheKey = ttsCacheKey(text);
-				let blob = getCachedTtsAudio(cacheKey);
-				if (!blob) {
-					ttsAbort = new AbortController();
-					const response = await fetch('/api/audio/speech', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ text, voice: $ttsVoice, workspace }),
-						signal: ttsAbort.signal
-					});
-					if (!response.ok) {
-						if (!ttsErrorShown) {
-							ttsErrorShown = true;
-							let detail = `${response.status}`;
-							try {
-								const data = await response.json();
-								detail = data?.detail || data?.error || detail;
-							} catch {}
-							toast.error($t('admin.audio.tts') + ': ' + detail);
-						}
-						ttsPlaybackEnabled.set(false);
-						voiceModeEnabled.set(false);
-						break;
-					}
-					blob = await response.blob();
-					cacheTtsAudio(cacheKey, blob);
-				}
+				const blob = await prepareTtsAudio(text, generation);
 
 				if (generation !== ttsGeneration) break;
 				if (ttsObjectUrl) URL.revokeObjectURL(ttsObjectUrl);
@@ -1161,12 +1193,10 @@
 					ttsObjectUrl = null;
 				}
 				ttsAudio = null;
-				ttsAbort = null;
 			}
 		} catch (err: any) {
 			if (!ttsStopRequested && err?.name !== 'AbortError' && !ttsErrorShown) {
-				ttsErrorShown = true;
-				toast.error($t('admin.audio.tts') + ': playback failed');
+				showTtsFailure(err?.message || 'playback failed');
 			}
 		} finally {
 			if (generation === ttsGeneration) ttsPlaying = false;

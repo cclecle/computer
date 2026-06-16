@@ -573,6 +573,8 @@
 	"chat.voiceModeOn": "Voice mode on",
 	"chat.voiceListening": "Listening...",
 	"chat.voiceWaiting": "Waiting for response...",
+	"chat.voiceProviderSttFallback": "Configured STT failed. Used browser transcript.",
+	"chat.voiceProviderSttNoAudio": "Configured STT needs microphone audio, but no voice-mode recording was captured.",
 	"chat.ttsNotConfigured": "Text-to-Speech is not enabled or configured.",
 	"chat.speakResponses": "Speak responses",
 	"chat.stopSpeaking": "Stop speaking",

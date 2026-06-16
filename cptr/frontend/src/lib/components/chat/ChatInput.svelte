@@ -7,6 +7,7 @@
 	import Placeholder from '@tiptap/extension-placeholder';
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 	import { all, createLowlight } from 'lowlight';
+	import { toast } from 'svelte-sonner';
 
 	import { createFileMention, extractMentionedFiles, type FileMentionAttrs } from './FileMention';
 	import { createSkillMention, extractMentionedSkills, type SkillMentionAttrs } from './SkillMention';
@@ -583,12 +584,12 @@
 		}, delay);
 	}
 
-	function stopVoiceRecognition() {
+	function stopVoiceRecognition(stopCapture = true) {
 		clearVoiceRestartTimer();
 		const recognition = voiceRecognition;
 		voiceRecognition = null;
 		voiceStopRequested = true;
-		stopVoiceCapture();
+		if (stopCapture) stopVoiceCapture();
 		try {
 			recognition?.stop();
 		} catch {}
@@ -635,9 +636,9 @@
 		const contentType = voiceCaptureMimeType || 'audio/webm';
 		voiceCaptureRecorder = null;
 		voiceCaptureStream = null;
-		voiceCaptureChunks = [];
 
 		if (!recorder) {
+			voiceCaptureChunks = [];
 			stream?.getTracks().forEach((track) => track.stop());
 			return null;
 		}
@@ -652,6 +653,7 @@
 			}
 		});
 		stream?.getTracks().forEach((track) => track.stop());
+		voiceCaptureChunks = [];
 		if (!chunks.length) return null;
 		const ext = contentType.includes('mp4') ? 'm4a' : 'webm';
 		return {
@@ -687,7 +689,14 @@
 		form.append('file', capture.blob, capture.filename);
 		form.append('workspace', workspace);
 		const res = await fetch('/api/audio/transcribe', { method: 'POST', body: form });
-		if (!res.ok) throw new Error('transcription failed');
+		if (!res.ok) {
+			let detail = `${res.status}`;
+			try {
+				const data = await res.json();
+				detail = data?.detail || data?.error || detail;
+			} catch {}
+			throw new Error(detail);
+		}
 		const data = await res.json();
 		return (data?.text || '').trim();
 	}
@@ -735,15 +744,19 @@
 			voiceWaitingForResponse = true;
 			voiceSawStreaming = false;
 			const capturePromise = stopVoiceCapture();
-			stopVoiceRecognition();
+			stopVoiceRecognition(false);
 			const capture = await capturePromise;
 			let text = browserText;
 			if ($voiceModeSttMode === 'provider' && capture) {
 				try {
 					text = (await transcribeVoiceModeCapture(capture)) || browserText;
-				} catch {
+				} catch (err: any) {
+					const detail = err?.message ? ` ${err.message}` : '';
+					toast.error(`${$t('chat.voiceProviderSttFallback')}${detail}`);
 					text = browserText;
 				}
+			} else if ($voiceModeSttMode === 'provider') {
+				toast.error($t('chat.voiceProviderSttNoAudio'));
 			} else if (capture) {
 				void saveVoiceModeSttCapture(capture, browserText);
 			}
