@@ -512,7 +512,10 @@
 			voiceModeEnabled.set(false);
 			ttsPlaybackEnabled.set(false);
 			stopTtsPlayback();
-		} else if ((!$ttsPlaybackEnabled && !$voiceModeEnabled) || !$ttsConfigured) {
+		} else if (
+			(!$ttsPlaybackEnabled && !$voiceModeEnabled && !$ttsAutoStreamEnabled) ||
+			!$ttsConfigured
+		) {
 			stopTtsPlayback();
 		}
 	});
@@ -599,6 +602,7 @@
 		if (!text || !selectedModel) return;
 		if (sending) return;
 		stopTtsPlayback();
+		if (shouldStreamTts()) void unlockTtsAudioPlayback();
 		sending = true;
 		const files = chatInputEl?.getFiles() ?? [];
 		// Transform TipTap mention format to markdown file links
@@ -950,7 +954,11 @@
 	}
 
 	function shouldUseTts() {
-		return $ttsEnabled && $ttsConfigured && ($ttsPlaybackEnabled || $voiceModeEnabled);
+		return (
+			$ttsEnabled &&
+			$ttsConfigured &&
+			($ttsPlaybackEnabled || $voiceModeEnabled || $ttsAutoStreamEnabled)
+		);
 	}
 
 	function shouldStreamTts() {
