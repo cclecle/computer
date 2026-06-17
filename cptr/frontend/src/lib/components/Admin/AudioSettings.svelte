@@ -25,6 +25,7 @@
 	let ttsVoice = $state('alloy');
 	let ttsFormat = $state('mp3');
 	let ttsPlaybackSpeed = $state(1);
+	let ttsAutoStreamEnabled = $state(false);
 	let hasExistingTtsKey = $state(false);
 	let voiceModeSystemPrompt = $state('');
 	let voiceModeSttMode = $state<'browser' | 'provider'>('browser');
@@ -49,6 +50,7 @@
 			ttsFormat = (config['audio.tts_format'] as string) || 'mp3';
 			const speed = Number(config['audio.tts_playback_speed']);
 			ttsPlaybackSpeed = Number.isFinite(speed) ? Math.min(Math.max(speed, 0.5), 2) : 1;
+			ttsAutoStreamEnabled = config['audio.tts_auto_stream_enabled'] === true;
 			hasExistingTtsKey = !!config['audio.tts_api_key'];
 			voiceModeSystemPrompt = (config['audio.voice_mode_system_prompt'] as string) || '';
 			voiceModeSttMode =
@@ -72,6 +74,7 @@
 				'audio.tts_voice': ttsVoice,
 				'audio.tts_format': ttsFormat,
 				'audio.tts_playback_speed': ttsPlaybackSpeed,
+				'audio.tts_auto_stream_enabled': ttsAutoStreamEnabled,
 				'audio.voice_mode_system_prompt': voiceModeSystemPrompt,
 				'audio.voice_mode_stt_mode': voiceModeSttMode
 			};
@@ -105,23 +108,41 @@
 
 		<div class="flex flex-col gap-2.5">
 			<label class="flex items-center justify-between cursor-pointer">
-				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.enableVoiceMemos')}</span>
-				<ToggleSwitch value={voiceMemosEnabled} onchange={(v) => { voiceMemosEnabled = v; }} />
+				<span class="text-xs text-gray-600 dark:text-gray-400"
+					>{$t('admin.audio.enableVoiceMemos')}</span
+				>
+				<ToggleSwitch
+					value={voiceMemosEnabled}
+					onchange={(v) => {
+						voiceMemosEnabled = v;
+					}}
+				/>
 			</label>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
 				{$t('admin.audio.voiceMemosHint')}
 			</p>
 
 			<label class="flex items-center justify-between cursor-pointer">
-				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.autoTranscribe')}</span>
-				<ToggleSwitch value={transcribeEnabled} onchange={(v) => { transcribeEnabled = v; }} />
+				<span class="text-xs text-gray-600 dark:text-gray-400"
+					>{$t('admin.audio.autoTranscribe')}</span
+				>
+				<ToggleSwitch
+					value={transcribeEnabled}
+					onchange={(v) => {
+						transcribeEnabled = v;
+					}}
+				/>
 			</label>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				{transcribeEnabled ? $t('admin.audio.transcribeOnHint') : $t('admin.audio.transcribeOffHint')}
+				{transcribeEnabled
+					? $t('admin.audio.transcribeOnHint')
+					: $t('admin.audio.transcribeOffHint')}
 			</p>
 
 			<div class="flex items-center justify-between">
-				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.recordingQuality')}</span>
+				<span class="text-xs text-gray-600 dark:text-gray-400"
+					>{$t('admin.audio.recordingQuality')}</span
+				>
 				<select
 					bind:value={quality}
 					class="bg-transparent text-xs text-gray-600 dark:text-gray-400 outline-none cursor-pointer"
@@ -132,7 +153,11 @@
 				</select>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				{quality === 'high' ? $t('admin.audio.qualityHintHigh') : quality === 'medium' ? $t('admin.audio.qualityHintMedium') : $t('admin.audio.qualityHintLow')}
+				{quality === 'high'
+					? $t('admin.audio.qualityHintHigh')
+					: quality === 'medium'
+						? $t('admin.audio.qualityHintMedium')
+						: $t('admin.audio.qualityHintLow')}
 			</p>
 		</div>
 
@@ -141,7 +166,9 @@
 
 		<div class="flex flex-col gap-2.5">
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-base-url">{$t('connections.baseUrl')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-base-url"
+					>{$t('connections.baseUrl')}</label
+				>
 				<input
 					id="stt-base-url"
 					type="text"
@@ -151,7 +178,9 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-api-key">{$t('connections.apiKey')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-api-key"
+					>{$t('connections.apiKey')}</label
+				>
 				<input
 					id="stt-api-key"
 					type="password"
@@ -161,7 +190,9 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-model">{$t('automations.model')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="stt-model"
+					>{$t('automations.model')}</label
+				>
 				<input
 					id="stt-model"
 					type="text"
@@ -181,13 +212,34 @@
 		<div class="flex flex-col gap-2.5">
 			<label class="flex items-center justify-between cursor-pointer">
 				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.enableTts')}</span>
-				<ToggleSwitch value={ttsEnabled} onchange={(v) => { ttsEnabled = v; }} />
+				<ToggleSwitch
+					value={ttsEnabled}
+					onchange={(v) => {
+						ttsEnabled = v;
+					}}
+				/>
 			</label>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
 				{$t('admin.audio.ttsEnabledHint')}
 			</p>
+			<label class="flex items-center justify-between cursor-pointer">
+				<span class="text-xs text-gray-600 dark:text-gray-400"
+					>{$t('admin.audio.ttsAutoStream')}</span
+				>
+				<ToggleSwitch
+					value={ttsAutoStreamEnabled}
+					onchange={(v) => {
+						ttsAutoStreamEnabled = v;
+					}}
+				/>
+			</label>
+			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
+				{$t('admin.audio.ttsAutoStreamHint')}
+			</p>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-base-url">{$t('connections.baseUrl')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-base-url"
+					>{$t('connections.baseUrl')}</label
+				>
 				<input
 					id="tts-base-url"
 					type="text"
@@ -197,7 +249,9 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-api-key">{$t('connections.apiKey')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-api-key"
+					>{$t('connections.apiKey')}</label
+				>
 				<input
 					id="tts-api-key"
 					type="password"
@@ -207,7 +261,9 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-model">{$t('automations.model')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-model"
+					>{$t('automations.model')}</label
+				>
 				<input
 					id="tts-model"
 					type="text"
@@ -217,7 +273,9 @@
 				/>
 			</div>
 			<div>
-				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-voice">{$t('admin.audio.ttsVoice')}</label>
+				<label class="text-xs text-gray-600 dark:text-gray-400" for="tts-voice"
+					>{$t('admin.audio.ttsVoice')}</label
+				>
 				<input
 					id="tts-voice"
 					type="text"
@@ -254,7 +312,9 @@
 						bind:value={ttsPlaybackSpeed}
 						class="w-28 accent-gray-700 dark:accent-gray-300"
 					/>
-					<span class="w-9 text-right text-xs text-gray-500 dark:text-gray-400">{ttsPlaybackSpeed.toFixed(2)}x</span>
+					<span class="w-9 text-right text-xs text-gray-500 dark:text-gray-400"
+						>{ttsPlaybackSpeed.toFixed(2)}x</span
+					>
 				</div>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600">
@@ -263,11 +323,15 @@
 		</div>
 
 		<!-- Voice Mode -->
-		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">{$t('admin.audio.voiceMode')}</h3>
+		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">
+			{$t('admin.audio.voiceMode')}
+		</h3>
 
 		<div class="flex flex-col gap-2.5">
 			<div class="flex items-center justify-between">
-				<span class="text-xs text-gray-600 dark:text-gray-400">{$t('admin.audio.voiceModeSttMode')}</span>
+				<span class="text-xs text-gray-600 dark:text-gray-400"
+					>{$t('admin.audio.voiceModeSttMode')}</span
+				>
 				<select
 					bind:value={voiceModeSttMode}
 					class="bg-transparent text-xs text-gray-600 dark:text-gray-400 outline-none cursor-pointer"
@@ -277,7 +341,9 @@
 				</select>
 			</div>
 			<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">
-				{voiceModeSttMode === 'browser' ? $t('admin.audio.voiceModeBrowserSttHint') : $t('admin.audio.voiceModeProviderSttHint')}
+				{voiceModeSttMode === 'browser'
+					? $t('admin.audio.voiceModeBrowserSttHint')
+					: $t('admin.audio.voiceModeProviderSttHint')}
 			</p>
 			<div>
 				<label class="text-xs text-gray-600 dark:text-gray-400" for="voice-mode-system-prompt">
@@ -297,12 +363,14 @@
 		</div>
 
 		<!-- Save -->
-		<div class="mt-auto pt-6 flex justify-end">
+		<div
+			class="sticky bottom-0 -mx-4 md:-mx-5 mt-6 flex justify-end border-t border-gray-100 bg-white/95 px-4 py-3 backdrop-blur dark:border-white/6 dark:bg-black/95 md:px-5"
+		>
 			<button
 				class="text-[13px] text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-100 disabled:opacity-50"
 				onclick={() => save()}
-				disabled={saving}
-			>{$t('settings.save')}</button>
+				disabled={saving}>{$t('settings.save')}</button
+			>
 		</div>
 	{/if}
 </div>

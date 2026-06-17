@@ -38,6 +38,7 @@
 		ttsConfigured,
 		ttsFormat,
 		setTtsAudioPlaybackSource,
+		ttsAutoStreamEnabled,
 		ttsPlaybackEnabled,
 		ttsVoice,
 		unlockTtsAudioPlayback,
@@ -952,6 +953,10 @@
 		return $ttsEnabled && $ttsConfigured && ($ttsPlaybackEnabled || $voiceModeEnabled);
 	}
 
+	function shouldStreamTts() {
+		return $ttsEnabled && $ttsConfigured && ($voiceModeEnabled || $ttsAutoStreamEnabled);
+	}
+
 	function resetTtsBuffer() {
 		ttsBuffer = '';
 		ttsInsideCodeFence = false;
@@ -1023,7 +1028,7 @@
 	}
 
 	function handleTtsDelta(messageId: string, delta: string) {
-		if (!shouldUseTts()) return;
+		if (!shouldStreamTts()) return;
 		if (!delta.trim()) return;
 
 		const active = allMessages.find((m) => m.id === messageId);
@@ -1043,7 +1048,7 @@
 	}
 
 	function flushTtsBuffer() {
-		if (!shouldUseTts()) return;
+		if (!shouldStreamTts()) return;
 		const chunk = cleanSpeechText(ttsBuffer);
 		resetTtsBuffer();
 		if (chunk.length > 1) enqueueSpeech(chunk);
@@ -1242,6 +1247,7 @@
 			if (generation === ttsGeneration) ttsPlaying = false;
 			if (generation === ttsGeneration) speakingMessageId = null;
 			if (generation === ttsGeneration) ttsStopRequested = false;
+			if (generation === ttsGeneration && !$voiceModeEnabled) ttsPlaybackEnabled.set(false);
 		}
 	}
 </script>

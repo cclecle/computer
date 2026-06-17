@@ -22,10 +22,13 @@ export const ttsConfigured = writable<boolean>(false);
 export const ttsVoice = writable<string>('alloy');
 export const ttsFormat = writable<string>('mp3');
 export const ttsPlaybackSpeed = writable<number>(1);
+export const ttsAutoStreamEnabled = writable<boolean>(false);
 export const voiceModeEnabled = writable<boolean>(false);
 export const voiceModeSttMode = writable<'browser' | 'provider'>('browser');
 export const ttsPlaybackEnabled = writable<boolean>(
-	typeof localStorage !== 'undefined' ? localStorage.getItem('ttsPlaybackEnabled') === 'true' : false
+	typeof localStorage !== 'undefined'
+		? localStorage.getItem('ttsPlaybackEnabled') === 'true'
+		: false
 );
 
 const SILENT_WAV =
@@ -74,7 +77,8 @@ export async function unlockTtsAudioPlayback() {
 
 	const unlocks: Promise<unknown>[] = [];
 	const AudioContextCtor =
-		window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+		window.AudioContext ||
+		(window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 	try {
 		if (AudioContextCtor) {
 			ttsAudioContext ??= new AudioContextCtor();
@@ -128,6 +132,7 @@ export async function refreshAudioState() {
 			tts_voice: string;
 			tts_format: string;
 			tts_playback_speed?: number;
+			tts_auto_stream_enabled?: boolean;
 			voice_mode_stt_mode?: string;
 		}>('/api/audio/state');
 		voiceMemosEnabled.set(data.voice_memos_enabled === true);
@@ -142,6 +147,7 @@ export async function refreshAudioState() {
 		ttsFormat.set(data.tts_format || 'mp3');
 		const speed = Number(data.tts_playback_speed);
 		ttsPlaybackSpeed.set(Number.isFinite(speed) ? Math.min(Math.max(speed, 0.5), 2) : 1);
+		ttsAutoStreamEnabled.set(data.tts_auto_stream_enabled === true);
 		voiceModeSttMode.set(data.voice_mode_stt_mode === 'provider' ? 'provider' : 'browser');
 	} catch {
 		voiceMemosEnabled.set(false);
@@ -149,6 +155,7 @@ export async function refreshAudioState() {
 		ttsEnabled.set(false);
 		ttsConfigured.set(false);
 		ttsPlaybackSpeed.set(1);
+		ttsAutoStreamEnabled.set(false);
 		voiceModeSttMode.set('browser');
 	}
 }

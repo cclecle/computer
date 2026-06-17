@@ -55,6 +55,7 @@ class AudioStateResponse(BaseModel):
     tts_voice: str
     tts_format: str
     tts_playback_speed: float
+    tts_auto_stream_enabled: bool
     voice_mode_stt_mode: str
 
 
@@ -218,6 +219,7 @@ async def audio_state(request: Request):
         tts_voice=str((await Config.get("audio.tts_voice")) or "alloy"),
         tts_format=str((await Config.get("audio.tts_format")) or "mp3"),
         tts_playback_speed=playback_speed,
+        tts_auto_stream_enabled=await Config.get("audio.tts_auto_stream_enabled") is True,
         voice_mode_stt_mode=str((await Config.get("audio.voice_mode_stt_mode")) or "browser"),
     )
 

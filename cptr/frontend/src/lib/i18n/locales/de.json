@@ -478,6 +478,8 @@
 	"admin.audio.tts": "Text-to-Speech",
 	"admin.audio.enableTts": "Text-to-Speech aktivieren",
 	"admin.audio.ttsEnabledHint": "Aktiviert den Sprachmodus und die Vorlesen-Schaltflächen, wenn ein TTS-Schlüssel verfügbar ist.",
+	"admin.audio.ttsAutoStream": "Stream-Antworten vorlesen",
+	"admin.audio.ttsAutoStreamHint": "Liest jede Assistentenantwort beim Streamen laut vor, auch außerhalb des Sprachmodus.",
 	"admin.audio.ttsKeyPlaceholder": "Leave blank to reuse STT key",
 	"admin.audio.ttsVoice": "Voice",
 	"admin.audio.ttsFormat": "Format",

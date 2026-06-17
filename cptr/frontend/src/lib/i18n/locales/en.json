@@ -593,6 +593,8 @@
 	"admin.audio.tts": "Text-to-Speech",
 	"admin.audio.enableTts": "Enable Text-to-Speech",
 	"admin.audio.ttsEnabledHint": "Enables voice mode and assistant speak buttons when a TTS key is available.",
+	"admin.audio.ttsAutoStream": "Speak streamed responses",
+	"admin.audio.ttsAutoStreamHint": "Read every assistant response aloud as it streams, even outside voice mode.",
 	"admin.audio.ttsKeyPlaceholder": "Leave blank to reuse STT key",
 	"admin.audio.ttsVoice": "Voice",
 	"admin.audio.ttsFormat": "Format",
