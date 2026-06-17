@@ -5,6 +5,8 @@
 		getGitDiff,
 		getGitShow,
 		getGitBranches,
+		getGitStatusFresh,
+		getGitStashes,
 		stageFiles,
 		unstageFiles,
 		discardChanges,
@@ -14,6 +16,7 @@
 		gitPush,
 		gitUncommit,
 		gitStash,
+		gitUnstash,
 		checkoutBranch,
 		createGitBranch
 	} from '$lib/apis/git';
@@ -25,7 +28,14 @@
 	import { t } from '$lib/i18n';
 	import Spinner from '$lib/components/common/Spinner.svelte';
 
-	type GitFile = { path: string; status: string; staged: boolean };
+	type GitFile = {
+		path: string;
+		status: string;
+		staged: boolean;
+		unstaged?: boolean;
+		staged_status?: string;
+		unstaged_status?: string;
+	};
 	type DiffHunk = { header: string; lines: { type: string; content: string }[] };
 	type DiffFile = { path: string; hunks: DiffHunk[] };
 	type Commit = { hash: string; short_hash: string; author: string; date: string; message: string };
@@ -253,6 +263,10 @@
 	async function doCommit() {
 		if (!commitSummary.trim() || !stagedFiles.length) return;
 		loading = true;
+		await stageFiles(
+			workspacePath,
+			stagedFiles.map((f) => f.path)
+		);
 		const msg = commitDescription.trim()
 			? `${commitSummary.trim()}\n\n${commitDescription.trim()}`
 			: commitSummary.trim();
@@ -326,12 +340,34 @@
 		await performBranchCheckout(branch, 'bring');
 	}
 
+	async function restoreStashedChangesForBranch(branch: string) {
+		const stashes = (await getGitStashes(workspacePath)) as { message?: string }[];
+		const index = stashes.findIndex((stash) => {
+			const message = stash.message ?? '';
+			return (
+				message.includes(`cptr-branch-switch:${branch}`) ||
+				message.includes(`Changes on ${branch} before checking out`)
+			);
+		});
+		if (index < 0) return;
+
+		const freshStatus = (await getGitStatusFresh(workspacePath)) as { files?: GitFile[] };
+		if ((freshStatus.files ?? []).length > 0) return;
+
+		const result = (await gitUnstash(workspacePath, index)) as { ok?: boolean; message?: string };
+		if (result.ok) {
+			flash(`Restored changes for ${branch}`);
+		} else {
+			flash(result.message || `Could not restore changes for ${branch}`);
+		}
+	}
+
 	async function performBranchCheckout(branch: string, changeMode: 'bring' | 'leave') {
 		loading = true;
 		try {
 			if (changeMode === 'leave') {
 				const currentBranch = gitStatus?.branch || 'current branch';
-				const message = `Changes on ${currentBranch} before checking out ${branch}`;
+				const message = `cptr-branch-switch:${currentBranch}`;
 				const stashResult = (await gitStash(workspacePath, message)) as {
 					ok?: boolean;
 					message?: string;
@@ -343,6 +379,7 @@
 			}
 			await checkoutBranch(workspacePath, branch);
 			pendingCheckoutBranch = null;
+			await restoreStashedChangesForBranch(branch);
 		} catch (e) {
 			flash(e instanceof Error ? e.message : 'Failed to switch branch');
 		} finally {
@@ -806,7 +843,7 @@
 
 							<!-- File list -->
 							<div class="flex-1 overflow-y-auto">
-								{#each gitStatus?.files ?? [] as file (`${file.path}:${file.staged}`)}
+								{#each gitStatus?.files ?? [] as file (file.path)}
 									{@const fp = fPath(file.path)}
 									{@const sc = statusChar(file.status)}
 									<button

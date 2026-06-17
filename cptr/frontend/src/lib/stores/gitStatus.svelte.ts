@@ -14,6 +14,9 @@ export interface GitFile {
 	path: string;
 	status: string;
 	staged: boolean;
+	unstaged?: boolean;
+	staged_status?: string;
+	unstaged_status?: string;
 }
 
 export interface GitStatus {

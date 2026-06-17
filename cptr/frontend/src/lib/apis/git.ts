@@ -45,6 +45,9 @@ export const getGitShow = (root: string, ref: string) =>
 export const getGitBranches = (root: string) =>
 	fetchJSON(`/api/git/branches?root=${encodeURIComponent(root)}`);
 
+export const getGitStashes = (root: string) =>
+	fetchJSON(`/api/git/stashes?root=${encodeURIComponent(root)}`);
+
 export const stageFiles = (root: string, files: string[]) =>
 	fetchJSON('/api/git/stage', jsonBody({ root, files }));
 
@@ -74,6 +77,9 @@ export const gitUncommit = (root: string) => fetchJSON('/api/git/uncommit', json
 
 export const gitStash = (root: string, message?: string) =>
 	fetchJSON('/api/git/stash', jsonBody({ root, message }));
+
+export const gitUnstash = (root: string, index = 0) =>
+	fetchJSON('/api/git/unstash', jsonBody({ root, index }));
 
 export const createGitBranch = (root: string, name: string) =>
 	fetchJSON('/api/git/branch', jsonBody({ root, name }));
