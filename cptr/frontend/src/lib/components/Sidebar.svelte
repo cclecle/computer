@@ -10,7 +10,7 @@
 		sidebarWidth,
 		appVersion,
 		showChangelog,
-		showSearch,
+		showSearch
 	} from '$lib/stores';
 	import Sortable from 'sortablejs';
 	import Icon from './Icon.svelte';
@@ -41,6 +41,7 @@
 	let menuButtonEl: HTMLButtonElement | undefined = $state();
 	let wsListEl: HTMLDivElement | undefined = $state();
 	let sortable: Sortable | null = null;
+	let unbindSocketListener: (() => void) | null = null;
 
 	// ── Per-workspace chat history ──────────────────────────────
 	let expandedWorkspaces = $state<Set<string>>(new Set());
@@ -119,7 +120,13 @@
 	// Socket listener for chat events — invalidate cache when chats update
 	const seenChatIds = new Set<string>();
 
-	function handleChatEvent(data: { chat_id: string; done?: boolean; title?: string; delta?: string; workspace?: string }) {
+	function handleChatEvent(data: {
+		chat_id: string;
+		done?: boolean;
+		title?: string;
+		delta?: string;
+		workspace?: string;
+	}) {
 		// Re-fetch on done, title update, or first event of a new chat
 		const isNew = !seenChatIds.has(data.chat_id);
 		seenChatIds.add(data.chat_id);
@@ -237,23 +244,13 @@
 		}
 
 		// Bind socket listener for chat cache invalidation
-		const tryBind = () => {
-			const socket = socketStore.getSocket();
-			if (!socket) {
-				setTimeout(tryBind, 200);
-				return;
-			}
-			socket.on('events:chat', handleChatEvent);
-		};
-		tryBind();
+		unbindSocketListener = socketStore.on('events:chat', handleChatEvent);
 	});
 
 	onDestroy(() => {
 		sortable?.destroy();
-		const socket = socketStore.getSocket();
-		if (socket) {
-			socket.off('events:chat', handleChatEvent);
-		}
+		unbindSocketListener?.();
+		unbindSocketListener = null;
 	});
 </script>
 
@@ -307,26 +304,31 @@
 				<span class="flex-1 text-left overflow-hidden text-ellipsis whitespace-nowrap"
 					>{$t('search.search')}</span
 				>
-				<KeyPill text={searchShortcut} class="ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
+				<KeyPill
+					text={searchShortcut}
+					class="ml-auto shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100"
+				/>
 			</button>
 		</div>
 
 		<!-- Automations (only when chat/LLM backend is available) -->
 		{#if $chatEnabled}
-		<div class="px-1.5 shrink-0">
-			<a
-				href="/automations"
-				class="flex items-center gap-1.5 w-full h-7 px-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-100 no-underline"
-				onclick={(e) => {
-					e.preventDefault();
-					goto('/automations');
-					if (typeof window !== 'undefined' && window.innerWidth < 768) sidebarOpen.set(false);
-				}}
-			>
-				<Icon name="clock" size={14} />
-				<span class="flex-1 text-left overflow-hidden text-ellipsis whitespace-nowrap">{$t('automations.title')}</span>
-			</a>
-		</div>
+			<div class="px-1.5 shrink-0">
+				<a
+					href="/automations"
+					class="flex items-center gap-1.5 w-full h-7 px-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-100 no-underline"
+					onclick={(e) => {
+						e.preventDefault();
+						goto('/automations');
+						if (typeof window !== 'undefined' && window.innerWidth < 768) sidebarOpen.set(false);
+					}}
+				>
+					<Icon name="clock" size={14} />
+					<span class="flex-1 text-left overflow-hidden text-ellipsis whitespace-nowrap"
+						>{$t('automations.title')}</span
+					>
+				</a>
+			</div>
 		{/if}
 
 		<!-- Workspace section header -->
@@ -349,10 +351,12 @@
 				{@const chats = wsChatsCache.get(ws.path)}
 				{@const isLoading = wsChatsLoading.has(ws.path)}
 				<div class="ws-item">
-					<div class="group flex items-center gap-1 w-full h-7 px-2 rounded-lg text-xs font-medium transition-colors duration-100
+					<div
+						class="group flex items-center gap-1 w-full h-7 px-2 rounded-lg text-xs font-medium transition-colors duration-100
 						{ws.path === currentPath
-						? 'bg-gray-200/50 text-gray-900 dark:bg-white/8 dark:text-white'
-						: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}">
+							? 'bg-gray-200/50 text-gray-900 dark:bg-white/8 dark:text-white'
+							: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+					>
 						<a
 							href="/?workspace={encodeURIComponent(ws.path)}"
 							class="flex items-center gap-1 flex-1 min-w-0 no-underline text-inherit"
@@ -372,7 +376,10 @@
 									aria-label={isExpanded ? $t('sidebar.collapse') : $t('sidebar.addWorkspace')}
 								>
 									<span class="ws-icon-folder"><Icon name="folder" size={14} /></span>
-									<span class="ws-icon-chevron" style="transform: rotate({isExpanded ? '90deg' : '0deg'})">
+									<span
+										class="ws-icon-chevron"
+										style="transform: rotate({isExpanded ? '90deg' : '0deg'})"
+									>
 										<Icon name="chevron-right" size={11} />
 									</span>
 								</span>
@@ -422,10 +429,7 @@
 										onclick={() => handleSidebarChatClick(chat.id, ws.path, chat.title)}
 									/>
 								{/each}
-								<button
-									class="ws-chat-show-more"
-									onclick={() => handleShowMoreChats(ws.path)}
-								>
+								<button class="ws-chat-show-more" onclick={() => handleShowMoreChats(ws.path)}>
 									{$t('sidebar.showMore')}
 								</button>
 							{:else if chats}
@@ -442,8 +446,6 @@
 				</div>
 			{/if}
 		</div>
-
-
 
 		<!-- Settings and profile footer pinned to the bottom -->
 		<div class="relative px-1 pb-0.5 shrink-0">
@@ -495,7 +497,12 @@
 					]
 				: []),
 			...($session ? [{ divider: true, label: '', onclick: () => {} }] : []),
-			{ label: $t('sidebar.settings'), icon: 'settings', shortcut: formatChord($keybindings.openSettings), onclick: openSettings },
+			{
+				label: $t('sidebar.settings'),
+				icon: 'settings',
+				shortcut: formatChord($keybindings.openSettings),
+				onclick: openSettings
+			},
 			{ divider: true, label: '', onclick: () => {} },
 			{ label: $t('sidebar.logOut'), icon: 'log-out', onclick: logout }
 		]}
@@ -617,7 +624,9 @@
 		align-items: center;
 		justify-content: center;
 		opacity: 0;
-		transition: opacity 0.1s, transform 0.1s;
+		transition:
+			opacity 0.1s,
+			transform 0.1s;
 		color: #9ca3af;
 	}
 

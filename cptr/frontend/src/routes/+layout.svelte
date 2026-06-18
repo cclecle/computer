@@ -51,6 +51,8 @@
 	let showSetup = $state(false);
 	let connectionToast: string | number | undefined;
 	let applyingServiceWorkerUpdate = false;
+	let lastGitRefreshFsTick = 0;
+	let gitRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	const BROWSER_SW_CLEANUP_RELOAD = 'cptr:pwa:browser-sw-cleanup-reload';
 
 	// Auth state
@@ -269,7 +271,9 @@
 	async function clearCptrCaches() {
 		if (!('caches' in window)) return;
 		const keys = await caches.keys();
-		await Promise.all(keys.filter((key) => key.startsWith('cptr-')).map((key) => caches.delete(key)));
+		await Promise.all(
+			keys.filter((key) => key.startsWith('cptr-')).map((key) => caches.delete(key))
+		);
 	}
 
 	function isCptrWorker(registration: ServiceWorkerRegistration) {
@@ -375,11 +379,17 @@
 
 	// Keep git decorations fresh after filesystem changes.
 	$effect(() => {
-		const _tick = systemEvents.fsTick;
+		const tick = systemEvents.fsTick;
 		const ws = $currentWorkspace;
-		if (_tick > 0 && ws && gitStatusStore.isRepo && systemEvents.isRelevantFsChange(ws.path)) {
+		if (tick === 0 || tick === lastGitRefreshFsTick || !ws) return;
+		lastGitRefreshFsTick = tick;
+		if (!systemEvents.isRelevantFsChange(ws.path)) return;
+
+		if (gitRefreshTimer) clearTimeout(gitRefreshTimer);
+		gitRefreshTimer = setTimeout(() => {
+			gitRefreshTimer = null;
 			gitStatusStore.refresh({ force: true });
-		}
+		}, 250);
 	});
 
 	// Sync isGitRepo flag from centralized store
@@ -395,13 +405,15 @@
 		href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap"
 		rel="stylesheet"
 	/>
-	<title>{$activeTab && $activeTab.type !== 'files'
-		? $currentWorkspace
-			? `${$activeTab.label} / ${$currentWorkspace.name} / cptr`
-			: `${$activeTab.label} / cptr`
-		: $currentWorkspace
-			? `${$currentWorkspace.name} / cptr`
-			: 'cptr'}</title>
+	<title
+		>{$activeTab && $activeTab.type !== 'files'
+			? $currentWorkspace
+				? `${$activeTab.label} / ${$currentWorkspace.name} / cptr`
+				: `${$activeTab.label} / cptr`
+			: $currentWorkspace
+				? `${$currentWorkspace.name} / cptr`
+				: 'cptr'}</title
+	>
 	<meta name="description" content={$t('app.tagline')} />
 </svelte:head>
 
@@ -422,7 +434,11 @@
 		onauth={handleAuth}
 	/>
 {:else if $stateLoaded && showSetup}
-	<SetupWizard oncomplete={() => { showSetup = false; }} />
+	<SetupWizard
+		oncomplete={() => {
+			showSetup = false;
+		}}
+	/>
 {:else if $stateLoaded}
 	<div
 		class="h-screen max-h-[100dvh] flex overflow-hidden font-sans antialiased text-gray-900 bg-white dark:text-gray-100 dark:bg-black"
@@ -478,7 +494,6 @@
 	closeButton
 	richColors
 	toastOptions={{
-		style:
-			'font-size: 12px; font-family: var(--font-sans); border-radius: 8px;'
+		style: 'font-size: 12px; font-family: var(--font-sans); border-radius: 8px;'
 	}}
 />

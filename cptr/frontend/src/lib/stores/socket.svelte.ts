@@ -9,13 +9,24 @@ import { io, type Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 let _connected = $state(false);
+type SocketHandler = (...args: any[]) => void;
+const registeredListeners = new Map<string, Set<SocketHandler>>();
+
+function bindRegisteredListeners(currentSocket: Socket) {
+	for (const [event, handlers] of registeredListeners) {
+		for (const handler of handlers) {
+			currentSocket.on(event, handler);
+		}
+	}
+}
 
 function connect() {
 	if (socket) return;
 	socket = io({
 		reconnection: true,
 		reconnectionDelay: 1000,
-		withCredentials: true
+		withCredentials: true,
+		transports: ['websocket', 'polling']
 	});
 
 	socket.on('connect', () => {
@@ -25,6 +36,8 @@ function connect() {
 	socket.on('disconnect', () => {
 		_connected = false;
 	});
+
+	bindRegisteredListeners(socket);
 }
 
 function disconnect() {
@@ -39,10 +52,35 @@ function getSocket(): Socket | null {
 	return socket;
 }
 
+function on(event: string, handler: SocketHandler): () => void {
+	let handlers = registeredListeners.get(event);
+	if (!handlers) {
+		handlers = new Set();
+		registeredListeners.set(event, handlers);
+	}
+	const wasRegistered = handlers.has(handler);
+	handlers.add(handler);
+	if (socket && !wasRegistered) {
+		socket.on(event, handler);
+	}
+	return () => off(event, handler);
+}
+
+function off(event: string, handler: SocketHandler) {
+	const handlers = registeredListeners.get(event);
+	handlers?.delete(handler);
+	if (handlers?.size === 0) {
+		registeredListeners.delete(event);
+	}
+	socket?.off(event, handler);
+}
+
 export const socketStore = {
 	connect,
 	disconnect,
 	getSocket,
+	on,
+	off,
 	get connected() {
 		return _connected;
 	}

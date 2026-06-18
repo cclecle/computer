@@ -104,6 +104,7 @@
 	const ttsPreparedAudio = new Map<string, PreparedTtsAudio>();
 	const TTS_AUDIO_CACHE_LIMIT_BYTES = 20 * 1024 * 1024;
 	const TTS_MAX_PREFETCH = 2;
+	let unbindSocketListeners: (() => void) | null = null;
 
 	onMount(() => {
 		if (initialChatId || typeof sessionStorage === 'undefined') return;
@@ -500,25 +501,18 @@
 			loadPreviousChats();
 		}
 
-		const tryBind = () => {
-			const socket = socketStore.getSocket();
-			if (!socket) {
-				setTimeout(tryBind, 100);
-				return;
-			}
-			socket.on('events:chat', handleSocketEvent);
-			socket.on('connect', handleReconnect);
+		const offChat = socketStore.on('events:chat', handleSocketEvent);
+		const offConnect = socketStore.on('connect', handleReconnect);
+		unbindSocketListeners = () => {
+			offChat();
+			offConnect();
 		};
-		tryBind();
 	});
 
 	onDestroy(() => {
 		stopTtsPlayback();
-		const socket = socketStore.getSocket();
-		if (socket) {
-			socket.off('events:chat', handleSocketEvent);
-			socket.off('connect', handleReconnect);
-		}
+		unbindSocketListeners?.();
+		unbindSocketListeners = null;
 		if (landingRefreshTimer) clearTimeout(landingRefreshTimer);
 		// Don't clear streamingChatTabs here -- the global listener in
 		// chat.ts handles cleanup when the "done" event arrives, so the

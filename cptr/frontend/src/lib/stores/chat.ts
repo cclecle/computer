@@ -36,7 +36,9 @@ let globalListenerBound = false;
 
 /** Whether browser notifications are enabled (persisted to localStorage). */
 export const notificationsEnabled = writable<boolean>(
-	typeof localStorage !== 'undefined' ? localStorage.getItem('notificationsEnabled') === 'true' : false
+	typeof localStorage !== 'undefined'
+		? localStorage.getItem('notificationsEnabled') === 'true'
+		: false
 );
 notificationsEnabled.subscribe((v) => {
 	if (typeof localStorage !== 'undefined') localStorage.setItem('notificationsEnabled', String(v));
@@ -53,85 +55,76 @@ notificationSound.subscribe((v) => {
 export function bindGlobalChatListener() {
 	if (globalListenerBound) return;
 
-	const tryBind = () => {
-		const socket = socketStore.getSocket();
-		if (!socket) {
-			setTimeout(tryBind, 200);
-			return;
-		}
+	socketStore.on(
+		'events:chat',
+		(data: {
+			chat_id: string;
+			done?: boolean;
+			title?: string;
+			content?: string;
+			workspace?: string;
+		}) => {
+			if (!data.done) return;
 
-		socket.on(
-			'events:chat',
-			(data: {
-				chat_id: string;
-				done?: boolean;
-				title?: string;
-				content?: string;
-				workspace?: string;
-			}) => {
-				if (!data.done) return;
-
-				// Clear streaming indicator for the tab
-				const tabId = chatToTab.get(data.chat_id);
-				if (tabId) {
-					streamingChatTabs.update((s) => {
-						const next = new Set(s);
-						next.delete(tabId);
-						return next;
-					});
-				}
-
-				// ── Notifications ──────────────────────────────────
-				// Skip if user is actively viewing this chat
-				const currentTab = get(activeTab);
-				const isViewingThisChat =
-					!document.hidden &&
-					currentTab?.type === 'chat' &&
-					currentTab?.path === data.chat_id;
-
-				if (isViewingThisChat) return;
-
-				const wsLabel = data.workspace ? `[${data.workspace}] ` : '';
-				const title = `${wsLabel}${data.title || 'Chat'}`;
-				const body = data.content || '';
-
-				// In-app toast
-				import('$lib/components/NotificationToast.svelte').then((mod) => {
-					const chatId = data.chat_id;
-					const toastId = toast.custom(mod.default, {
-						componentProps: {
-							title,
-							content: body,
-							onClick: async () => {
-								const { goto } = await import('$app/navigation');
-								const wsParam = data.workspace ? `workspace=${encodeURIComponent(data.workspace)}&` : '';
-								await goto(`/?${wsParam}chatId=${encodeURIComponent(chatId)}`);
-								toast.dismiss(toastId);
-							},
-							onclose: () => {
-								toast.dismiss(toastId);
-							}
-						},
-						duration: 10000,
-						unstyled: true
-					});
+			// Clear streaming indicator for the tab
+			const tabId = chatToTab.get(data.chat_id);
+			if (tabId) {
+				streamingChatTabs.update((s) => {
+					const next = new Set(s);
+					next.delete(tabId);
+					return next;
 				});
-
-				// Browser notification (only when tab is hidden)
-				if (document.hidden && get(notificationsEnabled)) {
-					try {
-						new Notification(`${title} • cptr`, {
-							body: body.slice(0, 200),
-							icon: '/favicon.png'
-						});
-					} catch {}
-				}
 			}
-		);
 
-		globalListenerBound = true;
-	};
-	tryBind();
+			// ── Notifications ──────────────────────────────────
+			// Skip if user is actively viewing this chat
+			const currentTab = get(activeTab);
+			const isViewingThisChat =
+				!document.hidden && currentTab?.type === 'chat' && currentTab?.path === data.chat_id;
+
+			if (isViewingThisChat) return;
+
+			const wsLabel = data.workspace ? `[${data.workspace}] ` : '';
+			const title = `${wsLabel}${data.title || 'Chat'}`;
+			const body = data.content || '';
+
+			// In-app toast
+			import('$lib/components/NotificationToast.svelte').then((mod) => {
+				const chatId = data.chat_id;
+				const toastId = toast.custom(mod.default, {
+					componentProps: {
+						title,
+						content: body,
+						onClick: async () => {
+							const { goto } = await import('$app/navigation');
+							const wsParam = data.workspace
+								? `workspace=${encodeURIComponent(data.workspace)}&`
+								: '';
+							await goto(`/?${wsParam}chatId=${encodeURIComponent(chatId)}`);
+							toast.dismiss(toastId);
+						},
+						onclose: () => {
+							toast.dismiss(toastId);
+						}
+					},
+					duration: 10000,
+					unstyled: true
+				});
+			});
+
+			// Browser notification (only when tab is hidden)
+			if (document.hidden && get(notificationsEnabled)) {
+				try {
+					new Notification(`${title} • cptr`, {
+						body: body.slice(0, 200),
+						icon: '/favicon.png'
+					});
+				} catch {}
+			}
+		}
+	);
+
+	globalListenerBound = true;
 }
 
 export interface ChatModel {
