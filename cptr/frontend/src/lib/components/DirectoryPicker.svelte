@@ -292,7 +292,7 @@
 	class="w-full max-w-[560px] mx-4 max-md:mx-0 max-md:rounded-none max-h-[480px] max-md:max-h-dvh flex flex-col mb-[6vh] max-md:mb-0"
 >
 	<!-- Path bar -->
-	<div class="flex items-center px-3.5 py-3 gap-2 shrink-0">
+	<div class="flex items-center px-3.5 pt-2.5 pb-2 gap-2 shrink-0">
 		{#if history.length > 0}
 			<button
 				class="flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-100 shrink-0"
@@ -331,7 +331,8 @@
 				{#if tabHint}
 					<span class="text-[10px] text-gray-400 whitespace-nowrap shrink-0">{tabHint}</span>
 				{/if}
-				<span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/6 text-gray-400 shrink-0"
+				<span
+					class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/6 text-gray-400 shrink-0"
 					>TAB</span
 				>
 			</div>
