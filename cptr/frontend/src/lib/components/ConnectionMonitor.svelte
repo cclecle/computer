@@ -2,16 +2,16 @@
 	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { t } from '$lib/i18n';
+	import { socketStore } from '$lib/stores/socket.svelte';
 
 	let isOnline = $state(true);
 	let toastId: string | number | undefined;
-	let healthTimer: ReturnType<typeof setInterval> | null = null;
+	let hasSeenSocketConnection = $state(false);
 
 	function showOffline() {
 		if (!isOnline) return;
 		isOnline = false;
 		toastId = toast.error($t('pwa.reconnecting'), { duration: Infinity });
-		startPolling();
 	}
 
 	function showOnline() {
@@ -19,42 +19,39 @@
 		isOnline = true;
 		if (toastId) toast.dismiss(toastId);
 		toastId = undefined;
-		stopPolling();
 	}
 
-	function checkHealth() {
-		fetch('/api/health', { method: 'HEAD', cache: 'no-store' })
-			.then((res) => {
-				if (res.ok) showOnline();
-			})
-			.catch(() => {});
-	}
-
-	function startPolling() {
-		stopPolling();
-		healthTimer = setInterval(checkHealth, 5000);
-	}
-
-	function stopPolling() {
-		if (healthTimer) {
-			clearInterval(healthTimer);
-			healthTimer = null;
+	function handleOnline() {
+		if (socketStore.connected) {
+			showOnline();
 		}
 	}
 
+	$effect(() => {
+		const socket = socketStore.getSocket();
+		const connected = socketStore.connected;
+
+		if (!socket) {
+			hasSeenSocketConnection = false;
+			showOnline();
+			return;
+		}
+
+		if (connected) {
+			hasSeenSocketConnection = true;
+			showOnline();
+		} else if (hasSeenSocketConnection) {
+			showOffline();
+		}
+	});
+
 	onMount(() => {
-		// Only react to browser offline/online events.
-		// Don't probe on mount; if we loaded, we're online.
 		window.addEventListener('offline', showOffline);
-		window.addEventListener('online', () => {
-			// Browser says online, verify with a real request
-			checkHealth();
-		});
+		window.addEventListener('online', handleOnline);
 
 		return () => {
 			window.removeEventListener('offline', showOffline);
-			window.removeEventListener('online', checkHealth);
-			stopPolling();
+			window.removeEventListener('online', handleOnline);
 			if (toastId) toast.dismiss(toastId);
 		};
 	});

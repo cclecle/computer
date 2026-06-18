@@ -28,8 +28,9 @@ function connect() {
 }
 
 function disconnect() {
-	socket?.disconnect();
+	const currentSocket = socket;
 	socket = null;
+	currentSocket?.disconnect();
 	_connected = false;
 }
 
