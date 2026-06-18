@@ -910,6 +910,7 @@
 	});
 
 	function runSlashCommand(commandId: string | undefined) {
+		if (commandId === 'compact' && (sending || streaming)) return;
 		if (commandId === 'compact' && oncompact) {
 			inputText = '';
 			oncompact();
