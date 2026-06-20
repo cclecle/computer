@@ -9,6 +9,7 @@
 	import Spinner from '../common/Spinner.svelte';
 	import AutomationModal from './AutomationModal.svelte';
 	import { sidebarOpen } from '$lib/stores';
+	import { getPathDisplayName } from '$lib/utils/paths';
 	import {
 		getAutomations,
 		toggleAutomation,
@@ -194,7 +195,11 @@
 			</div>
 		{:else if detail}
 			<!-- Header -->
-			<div class="flex items-center gap-2 h-9 {$sidebarOpen ? 'px-3' : 'px-1.5'} border-b border-gray-200 dark:border-white/6 shrink-0">
+			<div
+				class="flex items-center gap-2 h-9 {$sidebarOpen
+					? 'px-3'
+					: 'px-1.5'} border-b border-gray-200 dark:border-white/6 shrink-0"
+			>
 				{#if !$sidebarOpen}
 					<button
 						class="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-100"
@@ -225,7 +230,10 @@
 					</button>
 					<button
 						class="flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-75"
-						onclick={() => { editingAutomation = detail; showModal = true; }}
+						onclick={() => {
+							editingAutomation = detail;
+							showModal = true;
+						}}
 						title={$t('automationModal.save')}
 					>
 						<Icon name="pencil" size={11} />
@@ -245,33 +253,61 @@
 				<!-- Info rows -->
 				<div class="border-b border-gray-200 dark:border-white/6">
 					<div class="flex items-center h-7 px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.status')}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.status')}</span
+						>
 						<div class="flex items-center gap-1.5">
-							<span class="w-1.5 h-1.5 rounded-full {detail.is_active ? 'bg-emerald-500' : 'bg-gray-400'}"></span>
-							<span class="text-xs text-gray-700 dark:text-gray-300">{detail.is_active ? $t('automations.active') : $t('automations.paused')}</span>
+							<span
+								class="w-1.5 h-1.5 rounded-full {detail.is_active
+									? 'bg-emerald-500'
+									: 'bg-gray-400'}"
+							></span>
+							<span class="text-xs text-gray-700 dark:text-gray-300"
+								>{detail.is_active ? $t('automations.active') : $t('automations.paused')}</span
+							>
 						</div>
 					</div>
 					<div class="flex items-center h-7 px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.schedule')}</span>
-						<span class="text-xs text-gray-700 dark:text-gray-300">{parseFrequency(detail.rrule)}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.schedule')}</span
+						>
+						<span class="text-xs text-gray-700 dark:text-gray-300"
+							>{parseFrequency(detail.rrule)}</span
+						>
 					</div>
 					<div class="flex items-center h-7 px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.model')}</span>
-						<span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono">{detail.model_id}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.model')}</span
+						>
+						<span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono"
+							>{detail.model_id}</span
+						>
 					</div>
 					<div class="flex items-center h-7 px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.nextRun')}</span>
-						<span class="text-xs text-gray-700 dark:text-gray-300">{formatTime(detail.next_run_at)}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.nextRun')}</span
+						>
+						<span class="text-xs text-gray-700 dark:text-gray-300"
+							>{formatTime(detail.next_run_at)}</span
+						>
 					</div>
 					<div class="flex items-center h-7 px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.lastRun')}</span>
-						<span class="text-xs text-gray-700 dark:text-gray-300">{formatTime(detail.last_run_at)}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.lastRun')}</span
+						>
+						<span class="text-xs text-gray-700 dark:text-gray-300"
+							>{formatTime(detail.last_run_at)}</span
+						>
 					</div>
 					<div class="flex items-center min-h-[1.75rem] px-3">
-						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0">{$t('automations.webhook')}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-500 w-20 shrink-0"
+							>{$t('automations.webhook')}</span
+						>
 						{#if detail.webhook_url}
 							<div class="flex items-center gap-1.5 min-w-0 flex-1">
-								<span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate">...?token={detail.webhook_url.split('token=')[1]?.slice(0, 12)}...</span>
+								<span class="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate"
+									>...?token={detail.webhook_url.split('token=')[1]?.slice(0, 12)}...</span
+								>
 								<button
 									class="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-75 shrink-0"
 									onclick={copyWebhookUrl}
@@ -282,7 +318,9 @@
 						{:else if detail.has_webhook}
 							<!-- Webhook enabled, URL not available -->
 							<div class="flex items-center gap-1.5">
-								<span class="text-[11px] text-gray-700 dark:text-gray-300">{$t('automations.enabled')}</span>
+								<span class="text-[11px] text-gray-700 dark:text-gray-300"
+									>{$t('automations.enabled')}</span
+								>
 								<span class="text-gray-300 dark:text-gray-600">·</span>
 								<button
 									class="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-75"
@@ -314,36 +352,52 @@
 
 				<!-- Prompt -->
 				<div class="border-b border-gray-200 dark:border-white/6 px-3 py-2">
-					<div class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">{$t('automations.prompt')}</div>
-					<div class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto">
+					<div class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
+						{$t('automations.prompt')}
+					</div>
+					<div
+						class="text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono leading-relaxed max-h-32 overflow-y-auto"
+					>
 						{detail.prompt}
 					</div>
 				</div>
 
 				<!-- Runs -->
 				<div class="px-3 py-2">
-					<div class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">{$t('automations.runs')}</div>
+					<div class="text-[11px] text-gray-400 dark:text-gray-500 mb-1">
+						{$t('automations.runs')}
+					</div>
 					{#if runs.length === 0}
-						<div class="text-[11px] text-gray-400 dark:text-gray-600 py-2">{$t('automations.noRuns')}</div>
+						<div class="text-[11px] text-gray-400 dark:text-gray-600 py-2">
+							{$t('automations.noRuns')}
+						</div>
 					{:else}
 						{#each runs as run}
 							<div class="flex items-center gap-2 h-7 text-xs">
-								<span class="w-1.5 h-1.5 rounded-full shrink-0 {run.status === 'success' ? 'bg-emerald-500' : 'bg-red-400'}"></span>
+								<span
+									class="w-1.5 h-1.5 rounded-full shrink-0 {run.status === 'success'
+										? 'bg-emerald-500'
+										: 'bg-red-400'}"
+								></span>
 								<span class="text-gray-500 dark:text-gray-400">{formatTime(run.created_at)}</span>
 								{#if run.chat_id}
 									<button
 										class="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-75"
 										onclick={() => {
-											const ws = detail?.workspace;
-											const wsParam = ws ? `workspace=${encodeURIComponent(ws)}&` : '';
-											goto(`/?${wsParam}chatId=${encodeURIComponent(run.chat_id!)}`);
+											const workspacePath = detail?.workspace;
+											const workspaceQuery = workspacePath
+												? `workspace=${encodeURIComponent(workspacePath)}&`
+												: '';
+											goto(`/?${workspaceQuery}chatId=${encodeURIComponent(run.chat_id!)}`);
 										}}
 									>
 										{$t('automations.viewChat')}
 									</button>
 								{/if}
 								{#if run.error}
-									<span class="text-[11px] text-red-400 truncate" title={run.error}>{run.error}</span>
+									<span class="text-[11px] text-red-400 truncate" title={run.error}
+										>{run.error}</span
+									>
 								{/if}
 							</div>
 						{/each}
@@ -354,7 +408,11 @@
 	{:else}
 		<!-- ── List ── -->
 		<!-- Header -->
-		<div class="flex items-center gap-2 h-9 {$sidebarOpen ? 'px-3' : 'px-1.5'} border-b border-gray-200 dark:border-white/6 shrink-0">
+		<div
+			class="flex items-center gap-2 h-9 {$sidebarOpen
+				? 'px-3'
+				: 'px-1.5'} border-b border-gray-200 dark:border-white/6 shrink-0"
+		>
 			{#if !$sidebarOpen}
 				<button
 					class="flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-100"
@@ -381,7 +439,10 @@
 				</select>
 				<button
 					class="flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-75"
-					onclick={() => { editingAutomation = null; showModal = true; }}
+					onclick={() => {
+						editingAutomation = null;
+						showModal = true;
+					}}
 					title={$t('automations.newAutomation')}
 				>
 					<Icon name="plus" size={13} />
@@ -390,7 +451,9 @@
 		</div>
 
 		<!-- Search -->
-		<div class="flex items-center gap-1.5 h-8 px-3 border-b border-gray-200 dark:border-white/6 shrink-0">
+		<div
+			class="flex items-center gap-1.5 h-8 px-3 border-b border-gray-200 dark:border-white/6 shrink-0"
+		>
 			<Icon name="search" size={13} class="text-gray-400 shrink-0" />
 			<input
 				type="text"
@@ -400,7 +463,13 @@
 				oninput={loadList}
 			/>
 			{#if searchQuery}
-				<button class="text-gray-400 flex items-center" onclick={() => { searchQuery = ''; loadList(); }}>
+				<button
+					class="text-gray-400 flex items-center"
+					onclick={() => {
+						searchQuery = '';
+						loadList();
+					}}
+				>
 					<Icon name="xmark" size={11} />
 				</button>
 			{/if}
@@ -420,7 +489,10 @@
 					{#if !searchQuery}
 						<button
 							class="text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 px-3 py-1 rounded-lg bg-gray-100 dark:bg-white/6 transition-colors duration-75"
-							onclick={() => { editingAutomation = null; showModal = true; }}
+							onclick={() => {
+								editingAutomation = null;
+								showModal = true;
+							}}
 						>
 							{$t('automations.create')}
 						</button>
@@ -429,19 +501,25 @@
 			{:else}
 				{#each items as a (a.id)}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="flex items-center gap-2 h-7 px-2 rounded-md"
-					>
-						<span class="w-1.5 h-1.5 rounded-full shrink-0 {a.is_active ? 'bg-emerald-500' : 'bg-gray-400'}"></span>
+					<div class="flex items-center gap-2 h-7 px-2 rounded-md">
+						<span
+							class="w-1.5 h-1.5 rounded-full shrink-0 {a.is_active
+								? 'bg-emerald-500'
+								: 'bg-gray-400'}"
+						></span>
 						<button
 							class="text-xs text-gray-700 dark:text-gray-300 truncate flex-1 text-left hover:underline cursor-pointer transition-colors duration-75"
 							onclick={() => goto(`/automations/${a.id}`)}
 						>
 							{a.name}
 						</button>
-						<span class="text-[11px] text-gray-400 dark:text-gray-600 shrink-0">{a.workspace.split('/').pop()}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-600 shrink-0"
+							>{getPathDisplayName(a.workspace, a.workspace)}</span
+						>
 						<span class="text-[11px] text-gray-400 dark:text-gray-600 shrink-0">·</span>
-						<span class="text-[11px] text-gray-400 dark:text-gray-600 shrink-0">{parseFrequency(a.rrule)}</span>
+						<span class="text-[11px] text-gray-400 dark:text-gray-600 shrink-0"
+							>{parseFrequency(a.rrule)}</span
+						>
 
 						<div class="flex items-center gap-2 shrink-0" onclick={(e) => e.stopPropagation()}>
 							<button
@@ -465,7 +543,10 @@
 {#if showModal}
 	<AutomationModal
 		automation={editingAutomation}
-		onclose={() => { showModal = false; editingAutomation = null; }}
+		onclose={() => {
+			showModal = false;
+			editingAutomation = null;
+		}}
 		onsave={handleSave}
 	/>
 {/if}

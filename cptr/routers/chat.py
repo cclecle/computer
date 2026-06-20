@@ -214,7 +214,8 @@ async def _fetch_provider_models(conn: dict) -> list[str]:
                 else:
                     log.warning(
                         "Model auto-discovery failed for %s: HTTP %d",
-                        url, r.status_code,
+                        url,
+                        r.status_code,
                     )
 
         elif provider == "openai":
@@ -235,7 +236,8 @@ async def _fetch_provider_models(conn: dict) -> list[str]:
                 else:
                     log.warning(
                         "Model auto-discovery failed for %s: HTTP %d",
-                        url, r.status_code,
+                        url,
+                        r.status_code,
                     )
 
         else:
@@ -428,10 +430,7 @@ async def send_message(body: SendMessageRequest, request: Request):
         # Sync params into chat meta
         if chat.meta is None:
             chat.meta = {}
-        if (
-            chat.meta.get("params") != body.params
-            or chat.meta.get("last_model") != body.model_id
-        ):
+        if chat.meta.get("params") != body.params or chat.meta.get("last_model") != body.model_id:
             chat.meta["params"] = body.params
             chat.meta["last_model"] = body.model_id
             await Chat.update_meta(chat.id, chat.meta)
@@ -471,12 +470,16 @@ async def send_message(body: SendMessageRequest, request: Request):
     assistant_msg = None
     async with get_pending_input_lock(chat.id):
         if body.chat_id and await _chat_has_active_generation(chat.id):
+            queued_meta = {"queued": True}
+            if body.files:
+                queued_meta["files"] = body.files
             queued_msg = await ChatMessage.create(
                 chat_id=chat.id,
                 role="user",
                 content=body.content,
                 parent_id=body.parent_id,
-                meta={"queued": True},
+                model=body.model_id,
+                meta=queued_meta,
                 created_at=now_ms(),
             )
         else:
@@ -647,7 +650,8 @@ async def approve_tool(chat_id: str, message_id: str, body: ApproveRequest, requ
 
         model_id = msg.model or ""
         result = await execute_tool(
-            call["name"], call.get("arguments", {}),
+            call["name"],
+            call.get("arguments", {}),
             {"workspace": chat.meta.get("workspace", ""), "user_id": user_id, "model_id": model_id},
         )
         call["status"] = "completed"
@@ -845,7 +849,12 @@ async def queue_send_now(chat_id: str, message_id: str, request: Request):
     if not (msg.meta and msg.meta.get("queued")):
         raise HTTPException(400, "message is not queued")
 
-    from cptr.utils.chat_task import cancel_task, get_pending_input_lock, start_task
+    from cptr.utils.chat_task import (
+        cancel_task,
+        get_pending_input_lock,
+        select_pending_input_parent_id,
+        start_task,
+    )
 
     async with get_pending_input_lock(chat_id):
         # Cancel any active task
@@ -854,21 +863,18 @@ async def queue_send_now(chat_id: str, message_id: str, request: Request):
             if m.role == "assistant" and not m.done:
                 await cancel_task(m.id)
                 await ChatMessage.update(m.id, done=True)
-
-        # Delete all OTHER queued user prompts, keep this one.
-        for m in all_msgs:
-            if not (m.role == "user" and m.meta and m.meta.get("queued") and m.id != message_id):
-                continue
-            await ChatMessage.delete(m.id)
+                m.done = True
 
         # Clear queued flag on this message
         meta = dict(msg.meta or {})
         meta.pop("queued", None)
         await ChatMessage.update(message_id, meta=meta or None)
 
-        # Find parent: latest done assistant message, or the queued message's parent
-        done_assistants = [m for m in all_msgs if m.role == "assistant" and m.done]
-        parent_id = done_assistants[-1].id if done_assistants else msg.parent_id
+        parent_id = select_pending_input_parent_id(
+            all_msgs,
+            chat.current_message_id,
+            msg.parent_id,
+        )
 
         # Re-parent the user message to the correct leaf
         if msg.parent_id != parent_id:

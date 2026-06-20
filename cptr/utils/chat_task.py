@@ -111,9 +111,7 @@ def _merge_async_subagent_result_meta(messages: list[ChatMessage]) -> dict | Non
 
     if all((m.meta or {}).get("async_subagent_result") for m in messages):
         delegation_ids = [
-            m.meta.get("delegation_id")
-            for m in messages
-            if m.meta and m.meta.get("delegation_id")
+            m.meta.get("delegation_id") for m in messages if m.meta and m.meta.get("delegation_id")
         ]
         subagent_chat_ids = [
             m.meta.get("subagent_chat_id")
@@ -156,6 +154,40 @@ def _first_pending_input_batch(messages: list[ChatMessage]) -> list[ChatMessage]
     return batch
 
 
+def _merge_pending_input_meta(messages: list[ChatMessage]) -> dict | None:
+    async_meta = _merge_async_subagent_result_meta(messages)
+    if async_meta:
+        return async_meta
+
+    files: list[dict] = []
+    for message in messages:
+        meta = message.meta or {}
+        message_files = meta.get("files")
+        if isinstance(message_files, list):
+            files.extend(message_files)
+
+    return {"files": files} if files else None
+
+
+def select_pending_input_parent_id(
+    messages: list[ChatMessage],
+    current_message_id: str | None,
+    fallback_parent_id: str | None = None,
+) -> str | None:
+    """Choose the visible assistant leaf that pending input should follow."""
+    msg_map = {m.id: m for m in messages}
+    cur = msg_map.get(current_message_id) if current_message_id else None
+    seen: set[str] = set()
+    while cur and cur.id not in seen:
+        seen.add(cur.id)
+        if cur.role == "assistant" and cur.done:
+            return cur.id
+        cur = msg_map.get(cur.parent_id) if cur.parent_id else None
+
+    done_assistants = [m for m in messages if m.role == "assistant" and m.done]
+    return done_assistants[-1].id if done_assistants else fallback_parent_id
+
+
 async def process_pending_chat_inputs(chat_id: str, user_id: str, workspace: str):
     """Start the next task from user-queued prompts or internal subagent results.
 
@@ -170,19 +202,23 @@ async def process_pending_chat_inputs(chat_id: str, user_id: str, workspace: str
         if any(m.role == "assistant" and not m.done for m in all_msgs):
             return
 
-        pending_inputs = [
-            m for m in all_msgs if m.role == "user" and _is_pending_chat_input(m)
-        ]
+        pending_inputs = [m for m in all_msgs if m.role == "user" and _is_pending_chat_input(m)]
         if not pending_inputs:
             return
         input_batch = _first_pending_input_batch(pending_inputs)
 
         combined_content = "\n\n".join(m.content for m in input_batch if m.content)
-        combined_meta = _merge_async_subagent_result_meta(input_batch)
+        combined_meta = _merge_pending_input_meta(input_batch)
 
-        # Find the current leaf (latest done assistant message)
-        done_assistants = [m for m in all_msgs if m.role == "assistant" and m.done]
-        parent_id = done_assistants[-1].id if done_assistants else input_batch[0].parent_id
+        chat = await Chat.get_by_id(chat_id)
+        if not chat:
+            return
+
+        parent_id = select_pending_input_parent_id(
+            all_msgs,
+            chat.current_message_id,
+            input_batch[0].parent_id,
+        )
 
         for m in input_batch:
             await ChatMessage.delete(m.id)
@@ -197,12 +233,10 @@ async def process_pending_chat_inputs(chat_id: str, user_id: str, workspace: str
         )
 
         # Resolve model from the chat's last used model
-        chat = await Chat.get_by_id(chat_id)
-        if not chat:
-            return
         model_id = (chat.meta or {}).get("last_model", "")
         if not model_id:
             # Fall back to the model from the last assistant message
+            done_assistants = [m for m in all_msgs if m.role == "assistant" and m.done]
             last_asst = done_assistants[-1] if done_assistants else None
             model_id = (last_asst.model if last_asst else "") or ""
         if not model_id:
@@ -1039,7 +1073,13 @@ async def run_chat_task(
             title = "Chat"
         preview = content[:300] if content else ""
         ws_name = workspace.rstrip("/").rsplit("/", 1)[-1] if workspace else ""
-        await emit(done=True, title=title, content=preview, workspace=ws_name)
+        await emit(
+            done=True,
+            title=title,
+            content=preview,
+            workspace=workspace,
+            workspace_name=ws_name,
+        )
 
     # Load existing state so continuations don't overwrite previous output
     msg = await ChatMessage.get_by_id(message_id)
@@ -1397,9 +1437,7 @@ async def run_chat_task(
                     "workspace": workspace,
                     "user_id": user_id,
                     "model_id": model,
-                    "full_model_id": (
-                        (chat_obj.meta or {}).get("last_model") if chat_obj else None
-                    )
+                    "full_model_id": ((chat_obj.meta or {}).get("last_model") if chat_obj else None)
                     or model,
                     "chat_id": chat_id,
                     "message_id": message_id,

@@ -9,9 +9,9 @@ Three layers:
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Query
 from cptr.env import DATA_DIR
 from cptr.models import UserStates, Workspace
 from cptr.utils.config import get_or_create_user
@@ -28,6 +28,68 @@ async def _get_user_id(request: Request) -> str | None:
     if not auth or not auth.username:
         return None
     return await get_or_create_user(auth.username)
+
+
+def _resolve_workspace_path(path: str) -> str:
+    """Return the absolute, normalized workspace path."""
+    raw = (path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="workspace path is required")
+    expanded = Path(raw).expanduser()
+    if not expanded.is_absolute():
+        raise HTTPException(status_code=400, detail="workspace path must be absolute")
+    return str(expanded.resolve())
+
+
+def _try_resolve_workspace_path(path: str) -> str | None:
+    try:
+        return _resolve_workspace_path(path)
+    except HTTPException:
+        return None
+
+
+def _workspace_time(workspace: Workspace) -> int:
+    return workspace.updated_at or workspace.created_at or 0
+
+
+def _dedupe_workspaces(workspaces: list[Workspace]) -> list[tuple[str, Workspace]]:
+    by_path: dict[str, Workspace] = {}
+    for workspace in workspaces:
+        path = _try_resolve_workspace_path(workspace.path)
+        if not path:
+            continue
+        current = by_path.get(path)
+        if current is None or _workspace_time(workspace) > _workspace_time(current):
+            by_path[path] = workspace
+    return list(by_path.items())
+
+
+async def _workspaces_at_path(user_id: str, path: str) -> list[Workspace]:
+    workspaces = await Workspace.get_by_user(user_id)
+    return [
+        workspace for workspace in workspaces if _try_resolve_workspace_path(workspace.path) == path
+    ]
+
+
+def _newest_workspace(workspaces: list[Workspace]) -> Workspace | None:
+    if not workspaces:
+        return None
+    return max(workspaces, key=_workspace_time)
+
+
+def _workspace_display_name(path: str) -> str:
+    name = Path(path).name
+    if name == path and "\\" in path:
+        name = PureWindowsPath(path).name
+    return name or path
+
+
+async def _workspace_summaries(user_id: str) -> list[dict[str, str]]:
+    workspaces = await Workspace.get_by_user(user_id)
+    return [
+        {"path": path, "name": workspace.name or _workspace_display_name(path)}
+        for path, workspace in _dedupe_workspaces(workspaces)
+    ]
 
 
 # ── Preferences ──────────────────────────────────────────────────
@@ -62,8 +124,7 @@ async def get_workspace_list(request: Request):
     user_id = await _get_user_id(request)
     if not user_id:
         return []
-    workspaces = await Workspace.get_by_user(user_id)
-    return [{"path": ws.path, "name": ws.name} for ws in workspaces]
+    return await _workspace_summaries(user_id)
 
 
 # ── Single workspace CRUD ────────────────────────────────────────
@@ -75,13 +136,22 @@ async def get_workspace(request: Request, path: str = Query(...)):
     user_id = await _get_user_id(request)
     if not user_id:
         return {}
-    ws = await Workspace.get_by_path(user_id, path)
-    if not ws:
-        return {}
+    workspace_path = _resolve_workspace_path(path)
+    workspace = _newest_workspace(await _workspaces_at_path(user_id, workspace_path))
+    if not workspace:
+        return {
+            "name": _workspace_display_name(workspace_path),
+            "path": workspace_path,
+        }
+    workspace_data = dict(workspace.data or {})
+    file_browser_cwd = workspace_data.get("fileBrowserCwd")
+    if isinstance(file_browser_cwd, str):
+        file_browser_path = _try_resolve_workspace_path(file_browser_cwd)
+        workspace_data["fileBrowserCwd"] = file_browser_path or workspace_path
     return {
-        "name": ws.name,
-        "path": ws.path,
-        **ws.data,
+        **workspace_data,
+        "name": workspace.name or _workspace_display_name(workspace_path),
+        "path": workspace_path,
     }
 
 
@@ -91,12 +161,21 @@ async def put_workspace(request: Request, path: str = Query(...)):
     user_id = await _get_user_id(request)
     if not user_id:
         return {"status": "skipped"}
-    body = await request.json()
-    name = body.pop("name", path.rstrip("/").split("/")[-1] or path)
+    workspace_path = _resolve_workspace_path(path)
+    workspace_data = await request.json()
+    name = workspace_data.pop("name", _workspace_display_name(workspace_path))
+    workspace_data.pop("path", None)
     # Everything else is workspace data (groups, tabs, etc.)
-    await Workspace.upsert(user_id, path, name, body)
+    await Workspace.upsert(user_id, workspace_path, name, workspace_data)
 
-    return {"status": "saved"}
+    old_paths = [
+        workspace.path
+        for workspace in await _workspaces_at_path(user_id, workspace_path)
+        if workspace.path != workspace_path
+    ]
+    await Workspace.delete_by_paths(user_id, old_paths)
+
+    return {"status": "saved", "path": workspace_path}
 
 
 @router.delete("/workspace")
@@ -105,7 +184,11 @@ async def delete_workspace(request: Request, path: str = Query(...)):
     user_id = await _get_user_id(request)
     if not user_id:
         return {"status": "skipped"}
-    await Workspace.delete_by_path(user_id, path)
+    workspace_path = _resolve_workspace_path(path)
+    paths = [workspace.path for workspace in await _workspaces_at_path(user_id, workspace_path)]
+    if workspace_path not in paths:
+        paths.append(workspace_path)
+    await Workspace.delete_by_paths(user_id, paths)
     return {"status": "deleted"}
 
 
@@ -123,10 +206,18 @@ async def get_welcome(request: Request):
     user_id = await _get_user_id(request)
     recent: list[dict] = []
     if user_id:
-        workspaces = await Workspace.get_by_user(user_id)
-        # Sort by updated_at descending (most recent first)
-        workspaces.sort(key=lambda ws: ws.updated_at or 0, reverse=True)
-        recent = [{"name": ws.name, "path": ws.path} for ws in workspaces[:10]]
+        recents = sorted(
+            _dedupe_workspaces(await Workspace.get_by_user(user_id)),
+            key=lambda item: _workspace_time(item[1]),
+            reverse=True,
+        )
+        recent = [
+            {
+                "name": workspace.name or _workspace_display_name(path),
+                "path": path,
+            }
+            for path, workspace in recents[:10]
+        ]
 
     system_info["recent"] = recent
     return system_info

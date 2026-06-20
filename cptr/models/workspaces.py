@@ -98,6 +98,21 @@ class Workspace(Base):
             return result.rowcount > 0
 
     @staticmethod
+    async def delete_by_paths(user_id: str, paths: list[str]) -> int:
+        """Delete workspaces by path. Returns the number of deleted rows."""
+        if not paths:
+            return 0
+        async with await get_db() as db:
+            result = await db.execute(
+                delete(Workspace).where(
+                    Workspace.user_id == user_id,
+                    Workspace.path.in_(paths),
+                )
+            )
+            await db.commit()
+            return result.rowcount or 0
+
+    @staticmethod
     async def delete_by_user(user_id: str) -> None:
         """Delete all workspaces for a user."""
         async with await get_db() as db:

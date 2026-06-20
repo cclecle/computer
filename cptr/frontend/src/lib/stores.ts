@@ -29,6 +29,7 @@ import { changeLocale, i18next } from '$lib/i18n';
 import { streamingChatTabs } from '$lib/stores/chat';
 import { keybindings, loadKeybindings } from '$lib/stores/keybindings';
 import { defaultPwaPreferences, type PwaPreferences } from '$lib/intents/types';
+import { getPathDisplayName, isSupportedWorkspacePath } from '$lib/utils/paths';
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ function createDefaultGroup(): EditorGroup {
 }
 
 function createDefaultWorkspace(path: string): WorkspaceState {
-	const name = path.split('/').filter(Boolean).pop() || path;
+	const name = getPathDisplayName(path);
 	return {
 		name,
 		path,
@@ -144,19 +145,16 @@ export const requestParams = writable<Record<string, unknown>>({});
 export const appVersion = writable('');
 export const lastSeenVersion = writable('');
 export const latestVersion = writable('');
-export const updateAvailable = derived(
-	[appVersion, latestVersion],
-	([$app, $latest]) => {
-		if (!$app || !$latest || $app === 'dev' || $app === '0.0.0') return false;
-		return (
-			$app.localeCompare($latest, undefined, {
-				numeric: true,
-				sensitivity: 'case',
-				caseFirst: 'upper'
-			}) < 0
-		);
-	}
-);
+export const updateAvailable = derived([appVersion, latestVersion], ([$app, $latest]) => {
+	if (!$app || !$latest || $app === 'dev' || $app === '0.0.0') return false;
+	return (
+		$app.localeCompare($latest, undefined, {
+			numeric: true,
+			sensitivity: 'case',
+			caseFirst: 'upper'
+		}) < 0
+	);
+});
 export const showChangelog = writable(false);
 export const showUpdateToastPref = writable(true);
 export const showSearch = writable(false);
@@ -386,7 +384,8 @@ export async function loadPreferences(): Promise<void> {
 		if (prefs.version) lastSeenVersion.set(prefs.version as string);
 		if (prefs.selectedModelId) selectedModelId.set(prefs.selectedModelId as string);
 		if (prefs.requestParams) requestParams.set(prefs.requestParams as Record<string, unknown>);
-		if (prefs.showUpdateToast !== undefined) showUpdateToastPref.set(prefs.showUpdateToast as boolean);
+		if (prefs.showUpdateToast !== undefined)
+			showUpdateToastPref.set(prefs.showUpdateToast as boolean);
 		const pwaPrefs = prefs.pwa;
 		if (pwaPrefs)
 			pwaPreferences.set({
@@ -418,8 +417,13 @@ export async function loadWorkspaceList(): Promise<void> {
 // ── Load a specific workspace (called when URL changes) ─────────
 
 export async function loadWorkspace(path: string): Promise<void> {
+	if (!isSupportedWorkspacePath(path)) {
+		currentWorkspace.set(null);
+		return;
+	}
 	try {
 		const wsData = await getWorkspaceState(path);
+		const canonicalWorkspacePath = typeof wsData.path === 'string' ? wsData.path : path;
 
 		if (wsData && wsData.groups && (wsData.groups as EditorGroup[]).length > 0) {
 			// Validate terminal sessions are still alive
@@ -456,20 +460,19 @@ export async function loadWorkspace(path: string): Promise<void> {
 
 			currentWorkspace.set({
 				...ws,
-				path,
+				path: canonicalWorkspacePath,
 				groups,
 				activeGroupId,
 				splitDirection: ws.splitDirection ?? 'horizontal',
 				splitRatio: ws.splitRatio ?? 0.5,
-				fileBrowserCwd: ws.fileBrowserCwd ?? path
+				fileBrowserCwd: ws.fileBrowserCwd ?? canonicalWorkspacePath
 			});
 		} else {
 			// First time opening this workspace, create defaults
-			currentWorkspace.set(createDefaultWorkspace(path));
+			currentWorkspace.set(createDefaultWorkspace(canonicalWorkspacePath));
 		}
 	} catch {
-		// Error loading, create fresh workspace
-		currentWorkspace.set(createDefaultWorkspace(path));
+		currentWorkspace.set(null);
 	}
 }
 
@@ -556,7 +559,7 @@ if (typeof BroadcastChannel !== 'undefined') {
  * The URL is the single source of truth for which workspace is active.
  */
 export function addWorkspace(path: string): void {
-	const name = path.split('/').filter(Boolean).pop() || path;
+	const name = getPathDisplayName(path, path);
 
 	// Update workspace list for sidebar
 	workspaceList.update((list) => {
@@ -667,7 +670,7 @@ export function openFileTab(
 		return;
 	}
 
-	const name = filePath.split('/').pop() || filePath;
+	const name = getPathDisplayName(filePath, filePath);
 	const newTab: Tab = {
 		id: nextId(),
 		type: 'file',
@@ -914,7 +917,7 @@ export function markTabUnsaved(tabId: string, unsaved: boolean): void {
 }
 
 export function updateTabFilePath(tabId: string, newPath: string): void {
-	const name = newPath.split('/').pop() || newPath;
+	const name = getPathDisplayName(newPath, newPath);
 	currentWorkspace.update((ws) => {
 		if (!ws) return ws;
 		return {
@@ -966,7 +969,7 @@ export function openInSplit(filePath: string, direction?: SplitDirection): void 
 	}
 
 	// Create a new group with this file
-	const name = filePath.split('/').pop() || filePath;
+	const name = getPathDisplayName(filePath, filePath);
 	const newTab: Tab = { id: nextId(), type: 'file', label: name, filePath };
 	const newGroup: EditorGroup = {
 		id: nextId(),

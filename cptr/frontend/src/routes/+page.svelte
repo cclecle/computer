@@ -40,6 +40,7 @@
 	import WorkspacePicker from '$lib/components/WorkspacePicker.svelte';
 	import SystemInfo from '$lib/components/SystemInfo.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import { isSupportedWorkspacePath } from '$lib/utils/paths';
 
 	let showPicker = $state(false);
 	let pendingIntent = $state<LaunchIntent | null>(null);
@@ -67,7 +68,9 @@
 	type LaunchQueueWindow = Window & {
 		__cptrLaunchQueueBound?: boolean;
 		launchQueue?: {
-			setConsumer: (consumer: (params: { files?: { getFile: () => Promise<File> }[] }) => void) => void;
+			setConsumer: (
+				consumer: (params: { files?: { getFile: () => Promise<File> }[] }) => void
+			) => void;
 		};
 	};
 
@@ -108,7 +111,9 @@
 		return null;
 	}
 
-	function webCptrIntent(raw: string | null): { intent: string | null; params: URLSearchParams } | null {
+	function webCptrIntent(
+		raw: string | null
+	): { intent: string | null; params: URLSearchParams } | null {
 		if (!raw) return null;
 		let decoded = raw;
 		try {
@@ -314,12 +319,27 @@
 	}
 
 	$effect(() => {
-		const wsPath = $page.url.searchParams.get('workspace');
-		if (wsPath && wsPath !== lastLoadedPath) {
+		const workspacePath = $page.url.searchParams.get('workspace');
+		if (workspacePath && !isSupportedWorkspacePath(workspacePath)) {
+			lastLoadedPath = null;
+			currentWorkspace.set(null);
+			goto('/', { replaceState: true });
+			return;
+		}
+		if (workspacePath && workspacePath !== lastLoadedPath) {
 			// New workspace — load then process intents
-			lastLoadedPath = wsPath;
-			loadWorkspace(wsPath).then(() => processIntentParams());
-		} else if (wsPath && wsPath === lastLoadedPath) {
+			lastLoadedPath = workspacePath;
+			loadWorkspace(workspacePath).then(async () => {
+				const canonicalWorkspacePath = get(currentWorkspace)?.path;
+				if (canonicalWorkspacePath && canonicalWorkspacePath !== workspacePath) {
+					const params = new URLSearchParams($page.url.searchParams);
+					params.set('workspace', canonicalWorkspacePath);
+					lastLoadedPath = canonicalWorkspacePath;
+					await goto(`/?${params.toString()}`, { replaceState: true });
+				}
+				processIntentParams();
+			});
+		} else if (workspacePath && workspacePath === lastLoadedPath) {
 			// Same workspace — process intents immediately
 			processIntentParams();
 		} else if (!wsPath) {
@@ -698,11 +718,7 @@
 						<!-- Persist all tab instances so state survives tab switches (like VS Code) -->
 						{#each group.tabs.filter((t) => t.type === 'file' && t.filePath) as tab (tab.id)}
 							<div class="persisted-tab" class:persisted-tab-hidden={tab.id !== group.activeTabId}>
-								<FileEditor
-									filePath={tab.filePath!}
-									tabId={tab.id}
-									edit={tab.edit === true}
-								/>
+								<FileEditor filePath={tab.filePath!} tabId={tab.id} edit={tab.edit === true} />
 							</div>
 						{/each}
 
@@ -729,7 +745,6 @@
 								<PortPreview port={tab.port!} />
 							</div>
 						{/each}
-
 
 						<!-- Fallback content for non-persisted states -->
 						{#if !groupTab || groupTab.type === 'files'}

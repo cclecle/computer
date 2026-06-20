@@ -6,6 +6,7 @@ import { toast } from 'svelte-sonner';
 import { fetchJSON } from '$lib/apis';
 import { socketStore } from '$lib/stores/socket.svelte';
 import { activeTab } from '$lib/stores';
+import { getPathDisplayName, isSupportedWorkspacePath } from '$lib/utils/paths';
 
 export const chatEnabled = writable<boolean>(false);
 
@@ -63,6 +64,7 @@ export function bindGlobalChatListener() {
 			title?: string;
 			content?: string;
 			workspace?: string;
+			workspace_name?: string;
 		}) => {
 			if (!data.done) return;
 
@@ -84,23 +86,27 @@ export function bindGlobalChatListener() {
 
 			if (isViewingThisChat) return;
 
-			const wsLabel = data.workspace ? `[${data.workspace}] ` : '';
-			const title = `${wsLabel}${data.title || 'Chat'}`;
+			const workspacePath = isSupportedWorkspacePath(data.workspace) ? data.workspace : '';
+			const workspaceDisplayName = data.workspace_name || getPathDisplayName(workspacePath);
+			const workspaceTitlePrefix = workspaceDisplayName ? `[${workspaceDisplayName}] ` : '';
+			const title = `${workspaceTitlePrefix}${data.title || 'Chat'}`;
 			const body = data.content || '';
+			const openChat = async () => {
+				const { goto } = await import('$app/navigation');
+				const workspaceQuery = workspacePath
+					? `workspace=${encodeURIComponent(workspacePath)}&`
+					: '';
+				await goto(`/?${workspaceQuery}chatId=${encodeURIComponent(data.chat_id)}`);
+			};
 
 			// In-app toast
 			import('$lib/components/NotificationToast.svelte').then((mod) => {
-				const chatId = data.chat_id;
 				const toastId = toast.custom(mod.default, {
 					componentProps: {
 						title,
 						content: body,
 						onClick: async () => {
-							const { goto } = await import('$app/navigation');
-							const wsParam = data.workspace
-								? `workspace=${encodeURIComponent(data.workspace)}&`
-								: '';
-							await goto(`/?${wsParam}chatId=${encodeURIComponent(chatId)}`);
+							await openChat();
 							toast.dismiss(toastId);
 						},
 						onclose: () => {
@@ -115,10 +121,15 @@ export function bindGlobalChatListener() {
 			// Browser notification (only when tab is hidden)
 			if (document.hidden && get(notificationsEnabled)) {
 				try {
-					new Notification(`${title} • cptr`, {
+					const notification = new Notification(`${title} • cptr`, {
 						body: body.slice(0, 200),
 						icon: '/favicon.png'
 					});
+					notification.onclick = () => {
+						window.focus();
+						void openChat();
+						notification.close();
+					};
 				} catch {}
 			}
 		}

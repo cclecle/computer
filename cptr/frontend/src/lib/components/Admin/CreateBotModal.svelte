@@ -8,6 +8,7 @@
 	import DropdownMenu from '../DropdownMenu.svelte';
 	import ModelSelector from '../common/ModelSelector.svelte';
 	import { selectedModelId, workspaceList } from '$lib/stores';
+	import { getPathDisplayName } from '$lib/utils/paths';
 	import { createBot, updateBot, verifyBotToken, type BotData, type BotForm } from '$lib/apis/bots';
 	import { toast } from 'svelte-sonner';
 	import { t } from '$lib/i18n';
@@ -35,7 +36,7 @@
 
 	// Workspace dropdown
 	let showWsMenu = $state(false);
-	let wsBtnEl: HTMLButtonElement | undefined = $state();
+	let workspaceButtonEl: HTMLButtonElement | undefined = $state();
 
 	$effect(() => {
 		if (!workspace && $workspaceList.length > 0) {
@@ -43,18 +44,22 @@
 		}
 	});
 
-	let wsMenuItems = $derived(
-		$workspaceList.map((ws) => ({
-			label: ws.name,
+	let workspaceMenuItems = $derived(
+		$workspaceList.map((workspaceOption) => ({
+			label: workspaceOption.name,
 			icon: 'folder',
-			active: ws.path === workspace,
+			active: workspaceOption.path === workspace,
 			check: true,
-			onclick: () => { workspace = ws.path; }
+			onclick: () => {
+				workspace = workspaceOption.path;
+			}
 		}))
 	);
 
-	let selectedWsName = $derived(
-		$workspaceList.find((w) => w.path === workspace)?.name || workspace.split('/').pop() || $t('automationModal.selectWorkspace')
+	let selectedWorkspaceName = $derived(
+		$workspaceList.find((w) => w.path === workspace)?.name ||
+			getPathDisplayName(workspace) ||
+			$t('automationModal.selectWorkspace')
 	);
 
 	const platformHints: Record<string, string> = $derived({
@@ -89,7 +94,11 @@
 					name: name.trim(),
 					model_id: modelId,
 					workspace,
-					allowed_senders: allowedSenders.split(',').map((s) => s.trim()).filter(Boolean) || undefined
+					allowed_senders:
+						allowedSenders
+							.split(',')
+							.map((s) => s.trim())
+							.filter(Boolean) || undefined
 				};
 				if (token.trim()) update.token = token.trim();
 				await updateBot(bot.id, update);
@@ -100,7 +109,11 @@
 					token: token.trim(),
 					model_id: modelId,
 					workspace,
-					allowed_senders: allowedSenders.split(',').map((s) => s.trim()).filter(Boolean) || undefined
+					allowed_senders:
+						allowedSenders
+							.split(',')
+							.map((s) => s.trim())
+							.filter(Boolean) || undefined
 				});
 			}
 			onsave();
@@ -141,10 +154,14 @@
 					/>
 				</div>
 				<div class="w-28 shrink-0">
-					<label class="text-[10px] text-gray-400 dark:text-gray-600">{$t('messaging.platform')}</label>
+					<label class="text-[10px] text-gray-400 dark:text-gray-600"
+						>{$t('messaging.platform')}</label
+					>
 					<select
 						bind:value={platform}
-						onchange={() => { verifyResult = null; }}
+						onchange={() => {
+							verifyResult = null;
+						}}
 						class="block w-full bg-transparent text-[13px] text-gray-700 dark:text-gray-300 outline-none py-0.5 cursor-pointer"
 					>
 						<option value="telegram">Telegram</option>
@@ -177,7 +194,9 @@
 			<input
 				type="password"
 				bind:value={token}
-				placeholder={bot ? $t('messaging.tokenKeep') : platformHints[platform] || $t('messaging.tokenPaste')}
+				placeholder={bot
+					? $t('messaging.tokenKeep')
+					: platformHints[platform] || $t('messaging.tokenPaste')}
 				autocomplete="new-password"
 				class="flex-1 bg-transparent text-[13px] text-gray-700 dark:text-gray-300 placeholder:text-gray-300 dark:placeholder:text-gray-700 outline-none py-0.5 font-mono"
 			/>
@@ -200,7 +219,9 @@
 		{#if verifyResult}
 			<p class="text-[10px] mb-1 text-gray-500 dark:text-gray-400">
 				{#if verifyResult.ok}
-					✓ {verifyResult.info?.username ? `@${verifyResult.info.username}` : `ID: ${verifyResult.info?.id}`}
+					✓ {verifyResult.info?.username
+						? `@${verifyResult.info.username}`
+						: `ID: ${verifyResult.info?.id}`}
 				{:else}
 					✗ {verifyResult.error}
 				{/if}
@@ -208,8 +229,12 @@
 		{/if}
 
 		<!-- Allowed senders -->
-		<label class="text-[10px] text-gray-400 dark:text-gray-600 mt-1">{$t('messaging.allowedSenders')}</label>
-		<p class="text-[10px] text-gray-300 dark:text-gray-700 mb-0.5">{$t('messaging.allowedSendersHint')}</p>
+		<label class="text-[10px] text-gray-400 dark:text-gray-600 mt-1"
+			>{$t('messaging.allowedSenders')}</label
+		>
+		<p class="text-[10px] text-gray-300 dark:text-gray-700 mb-0.5">
+			{$t('messaging.allowedSendersHint')}
+		</p>
 		<input
 			type="text"
 			bind:value={allowedSenders}
@@ -227,14 +252,22 @@
 
 				<!-- Workspace selector -->
 				<button
-					bind:this={wsBtnEl}
+					bind:this={workspaceButtonEl}
 					type="button"
 					class="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors duration-100"
 					onclick={() => (showWsMenu = !showWsMenu)}
 				>
 					<Icon name="folder" size={12} />
-					<span class="truncate max-w-[120px]">{selectedWsName}</span>
-					<svg class="w-3 h-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+					<span class="truncate max-w-[120px]">{selectedWorkspaceName}</span>
+					<svg
+						class="w-3 h-3 opacity-50"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
 						<polyline points="6 9 12 15 18 9" />
 					</svg>
 				</button>
@@ -256,10 +289,10 @@
 	</div>
 </Modal>
 
-{#if showWsMenu && wsBtnEl}
+{#if showWsMenu && workspaceButtonEl}
 	<DropdownMenu
-		items={wsMenuItems}
-		anchor={wsBtnEl}
+		items={workspaceMenuItems}
+		anchor={workspaceButtonEl}
 		onclose={() => (showWsMenu = false)}
 		preferAbove={true}
 		maxHeight="15rem"

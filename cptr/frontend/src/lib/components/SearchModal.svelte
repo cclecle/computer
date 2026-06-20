@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { workspaceList, currentWorkspace, showSearch } from '$lib/stores';
+	import { getPathDisplayName } from '$lib/utils/paths';
 	import {
 		unifiedSearch,
 		getRecentChats,
@@ -34,9 +35,7 @@
 	// When on /automations or other non-workspace pages, $currentWorkspace
 	// retains the last workspace but we should search across all.
 	const urlWorkspacePath = $derived($page.url.searchParams.get('workspace'));
-	const effectiveWorkspace = $derived(
-		urlWorkspacePath ? $currentWorkspace : null
-	);
+	const effectiveWorkspace = $derived(urlWorkspacePath ? $currentWorkspace : null);
 
 	// Show recents when no query, search results when query exists
 	const showingRecents = $derived(!query.trim());
@@ -119,11 +118,10 @@
 		}
 	}
 
-	function workspaceName(wsPath: string): string {
-		const ws = $workspaceList.find((w) => w.path === wsPath);
-		if (ws) return ws.name;
-		const parts = wsPath.split('/');
-		return parts[parts.length - 1] || wsPath;
+	function getWorkspaceDisplayName(workspacePath: string): string {
+		const workspace = $workspaceList.find((item) => item.path === workspacePath);
+		if (workspace) return workspace.name;
+		return getPathDisplayName(workspacePath, workspacePath);
 	}
 
 	function selectChat(chat: ChatSearchResult) {
@@ -134,9 +132,13 @@
 	function selectFile(file: FileSearchResult) {
 		onclose();
 		if (file.type === 'file') {
-			goto(`/?workspace=${encodeURIComponent(file.workspace)}&file=${encodeURIComponent(file.path)}`);
+			goto(
+				`/?workspace=${encodeURIComponent(file.workspace)}&file=${encodeURIComponent(file.path)}`
+			);
 		} else if (file.type === 'directory') {
-			goto(`/?workspace=${encodeURIComponent(file.workspace)}&dir=${encodeURIComponent(file.path)}`);
+			goto(
+				`/?workspace=${encodeURIComponent(file.workspace)}&dir=${encodeURIComponent(file.path)}`
+			);
 		}
 	}
 
@@ -224,7 +226,11 @@
 	<div bind:this={resultsEl} class="overflow-y-auto px-1.5 pb-1.5 flex-1 min-h-0">
 		{#if showingRecents && filteredRecents.length > 0}
 			<!-- Recent chats (empty query) -->
-			<div class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5">{$t('search.recentChats')}</div>
+			<div
+				class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5"
+			>
+				{$t('search.recentChats')}
+			</div>
 			{#each filteredRecents as chat, i (chat.id)}
 				<button
 					data-idx={i}
@@ -236,18 +242,29 @@
 					onmouseenter={() => (selectedIndex = i)}
 				>
 					<span class="text-xs font-medium truncate flex-1">{chat.title}</span>
-				{#if i < 9 && !isWorkspaceScoped}
-						<KeyPill text={`⌘${i + 1}`} class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100" />
+					{#if i < 9 && !isWorkspaceScoped}
+						<KeyPill
+							text={`⌘${i + 1}`}
+							class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-100"
+						/>
 					{/if}
-					<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0">{workspaceName(chat.workspace)}</span>
+					<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0"
+						>{getWorkspaceDisplayName(chat.workspace)}</span
+					>
 				</button>
 			{/each}
 		{:else if showingRecents}
-			<div class="py-6 text-center text-xs text-gray-400 dark:text-gray-600">{$t('search.noRecentChats')}</div>
+			<div class="py-6 text-center text-xs text-gray-400 dark:text-gray-600">
+				{$t('search.noRecentChats')}
+			</div>
 		{:else if !showingRecents}
 			{#if displayedChats.length > 0}
 				<!-- Chat search results -->
-				<div class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5">{$t('search.chats')}</div>
+				<div
+					class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5"
+				>
+					{$t('search.chats')}
+				</div>
 				{#each displayedChats as chat, i (chat.id)}
 					{@const idx = i}
 					<button
@@ -262,20 +279,33 @@
 						<div class="flex-1 min-w-0">
 							<div class="flex items-center gap-2">
 								<span class="text-xs font-medium truncate">{chat.title}</span>
-								<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0">{relativeTime(chat.updated_at)}</span>
+								<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0"
+									>{relativeTime(chat.updated_at)}</span
+								>
 							</div>
 							{#if chat.snippet}
-								<div class="text-[11px] text-gray-400 dark:text-gray-600 truncate mt-0.5">{chat.snippet}</div>
+								<div class="text-[11px] text-gray-400 dark:text-gray-600 truncate mt-0.5">
+									{chat.snippet}
+								</div>
 							{/if}
 						</div>
-						<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0">{workspaceName(chat.workspace)}</span>
+						<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0"
+							>{getWorkspaceDisplayName(chat.workspace)}</span
+						>
 					</button>
 				{/each}
 			{/if}
 
 			{#if fileResults.length > 0}
 				<!-- File search results -->
-				<div class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5 {displayedChats.length > 0 ? 'mt-1' : ''}">{$t('search.files')}</div>
+				<div
+					class="text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600 px-2 pt-1 pb-0.5 {displayedChats.length >
+					0
+						? 'mt-1'
+						: ''}"
+				>
+					{$t('search.files')}
+				</div>
 				{#each fileResults as file, i (file.path)}
 					{@const idx = displayedChats.length + i}
 					<button
@@ -296,7 +326,9 @@
 						<span class="text-[11px] text-gray-400 overflow-hidden text-ellipsis whitespace-nowrap"
 							>{relPath(file.path, file.workspace)}</span
 						>
-						<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0 ml-auto">{workspaceName(file.workspace)}</span>
+						<span class="text-[10px] text-gray-400 dark:text-gray-600 shrink-0 ml-auto"
+							>{getWorkspaceDisplayName(file.workspace)}</span
+						>
 					</button>
 				{/each}
 			{/if}

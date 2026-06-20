@@ -35,6 +35,7 @@
 		selectedModelId,
 		requestParams
 	} from '$lib/stores';
+	import { getPathDisplayName } from '$lib/utils/paths';
 	import {
 		ttsEnabled,
 		ttsConfigured,
@@ -149,6 +150,25 @@
 		return map;
 	}
 
+	function isPendingHiddenMessage(m: ChatMessageRow): boolean {
+		return !!(m.meta?.queued || m.meta?.async_subagent_pending);
+	}
+
+	function nearestVisibleAncestorId(
+		messageId: string | null,
+		allMsgMap: Map<string, ChatMessageRow>,
+		visibleMsgMap: Map<string, ChatMessageRow>
+	): string | null {
+		let cur = messageId;
+		const seen = new Set<string>();
+		while (cur && !seen.has(cur)) {
+			seen.add(cur);
+			if (visibleMsgMap.has(cur)) return cur;
+			cur = allMsgMap.get(cur)?.parent_id ?? null;
+		}
+		return null;
+	}
+
 	function findLeaf(messageId: string, childrenMap: Map<string | null, ChatMessageRow[]>): string {
 		let cur = messageId;
 		while (true) {
@@ -162,18 +182,20 @@
 		if (!allMessages.length) return [];
 
 		// Exclude pending internal inputs until the parent has processed them.
-		const displayMessages = allMessages.filter(
-			(m) => !m.meta?.queued && !m.meta?.async_subagent_pending
-		);
+		const displayMessages = allMessages.filter((m) => !isPendingHiddenMessage(m));
 		if (!displayMessages.length) return [];
 
+		const allMsgMap = new Map(allMessages.map((m) => [m.id, m]));
 		const msgMap = new Map(displayMessages.map((m) => [m.id, m]));
 		const childrenMap = buildChildrenMap(displayMessages);
 
-		// Determine effective currentId: fall back to last message if unset
+		// Determine effective currentId. If the persisted current leaf points at
+		// a hidden queued/internal input, anchor the display at its visible parent
+		// instead of falling onto an unrelated branch.
+		const visibleCurrentId = nearestVisibleAncestorId(currentMessageId, allMsgMap, msgMap);
 		const effectiveId =
-			currentMessageId && msgMap.has(currentMessageId)
-				? currentMessageId
+			visibleCurrentId && msgMap.has(visibleCurrentId)
+				? visibleCurrentId
 				: displayMessages.length > 0
 					? displayMessages[displayMessages.length - 1].id
 					: null;
@@ -259,7 +281,7 @@
 
 	const streaming = $derived(allMessages.some((m) => m.role === 'assistant' && !m.done));
 	const isLanding = $derived(allMessages.length === 0 && !chatId);
-	const workspaceName = $derived(workspace.split('/').pop() || 'workspace');
+	const workspaceDisplayName = $derived(getPathDisplayName(workspace, 'workspace'));
 
 	// Queued messages: user-authored messages waiting behind an active response.
 	const queuedMessages = $derived(
@@ -373,7 +395,7 @@
 		pending_inputs_processed?: boolean;
 		async_subagent_pending?: boolean;
 		title?: string;
-		}) {
+	}) {
 		// On the landing page, update the chat list in place from socket events
 		if (isLanding) {
 			const knownChat = previousChats.some((c) => c.id === data.chat_id);
@@ -684,7 +706,7 @@
 								parent_id: parentId,
 								role: 'user' as const,
 								content: text,
-								model: null,
+								model: selectedModel,
 								done: true,
 								output: null,
 								usage: null,
@@ -1345,7 +1367,7 @@
 					bind:selectedModel
 					{sending}
 					{workspace}
-					placeholder={$t('chat.placeholder', { name: workspaceName })}
+					placeholder={$t('chat.placeholder', { name: workspaceDisplayName })}
 					onsend={send}
 					{queuedMessages}
 					onqueuesendnow={handleQueueSendNow}
@@ -1378,9 +1400,9 @@
 					{#if hasHiddenMessages}
 						<div bind:this={loadSentinelEl} class="h-1 w-full" aria-hidden="true"></div>
 					{/if}
-						{#each visiblePath as { msg, siblingIds, siblingIndex } (msg.id)}
-							{#if msg.role === 'user'}
-								<UserMessage
+					{#each visiblePath as { msg, siblingIds, siblingIndex } (msg.id)}
+						{#if msg.role === 'user'}
+							<UserMessage
 								content={msg.content}
 								meta={msg.meta}
 								{siblingIndex}
