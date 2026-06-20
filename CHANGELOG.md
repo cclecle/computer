@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-06-20
+
+### Added
+
+- 🔍 **Firecrawl web search.** Added Firecrawl as a web search provider. Configure your API key from Settings > Web, or set `FIRECRAWL_API_KEY` as an environment variable. Firecrawl slots in between Brave and DuckDuckGo in the automatic provider order, and also works with a custom self-hosted endpoint.
+
+### Changed
+
+- 📂 **Workspace paths are normalized.** Paths like `~/Projects/myapp` and `/Users/you/Projects/myapp` now resolve to the same workspace instead of creating duplicates. Existing duplicates are cleaned up automatically when you open or save a workspace.
+- 🔔 **Clicking a browser notification opens the chat.** Desktop notifications for completed tasks now take you straight to the conversation when you click them, instead of just bringing the window to the front.
+- 🏷️ **Workspace names display consistently.** Folder names shown in the sidebar, search results, automation list, and notifications now all use the same logic, so you see the same label everywhere.
+- 🧹 **Pending messages follow the right branch.** When queued messages or background sub-agent results come in, they now attach to the correct point in the conversation instead of occasionally landing on the wrong branch.
+
 ## [0.6.0] - 2026-06-20
 
 ### Added
