@@ -1547,9 +1547,12 @@ async def update_memory(
     Use user memory for stable preferences, communication style, and cross-workspace
     facts. Use workspace memory for repo-specific conventions, verification
     commands, architecture notes, and local tool quirks. Make all changes in one
-    operations array so removals/replacements and additions apply atomically.
+    operations array so removals/replacements and additions apply atomically. Simple
+    add/replace/remove operations update the baseline USER.md/WORKSPACE.md bullet list.
+    Operations with path, heading, memory_id, link, move, split, or merge edit the
+    Markdown memory vault.
     :param scope: "user" for global per-user memory, or "workspace" for the current workspace only.
-    :param operations: Batch of {action, content?, old_text?}; action is add, replace, or remove.
+    :param operations: Batch of memory operations. Supported actions are add, replace, remove, link, move, split, and merge.
     """
     from cptr.utils.memory import get_memory_settings, remember
 

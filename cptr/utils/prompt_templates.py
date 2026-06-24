@@ -248,7 +248,14 @@ def _build_template_variables(workspace: str, model: str = "", memory: str = "")
     }
 
 
-async def load_system_prompt(workspace: str, model: str = "", user_id: str | None = None) -> str:
+async def load_system_prompt(
+    workspace: str,
+    model: str = "",
+    user_id: str | None = None,
+    current_message: str = "",
+    recent_messages: list[dict] | None = None,
+    mentioned_files: list[str] | None = None,
+) -> str:
     """Load and render the system prompt for a workspace/model.
 
     Resolution order:
@@ -289,7 +296,13 @@ async def load_system_prompt(workspace: str, model: str = "", user_id: str | Non
         try:
             from cptr.utils.memory import build_memory_prompt
 
-            memory = await build_memory_prompt(user_id, workspace)
+            memory = await build_memory_prompt(
+                user_id,
+                workspace,
+                current_message=current_message,
+                recent_messages=recent_messages or [],
+                mentioned_files=mentioned_files or [],
+            )
         except Exception:
             logger.debug("[memory] Failed to load managed memory", exc_info=True)
 

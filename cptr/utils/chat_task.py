@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 
 from cptr.env import CHAT_MAX_ITERATIONS, CHAT_TOOL_MAX_CHARS
@@ -100,6 +101,33 @@ def get_live_state(message_id: str) -> dict | None:
 def get_active_chat_ids() -> set[str]:
     """Return the set of chat_ids that currently have a running task."""
     return {cid for mid, cid in _task_chat.items() if mid in _tasks and not _tasks[mid].done()}
+
+
+def _plain_message_text(content) -> str:
+    if isinstance(content, list):
+        return " ".join(
+            str(block.get("text", ""))
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        )
+    return str(content or "")
+
+
+def _memory_recall_inputs(
+    messages: list[dict],
+    regeneration_prompt: str | None = None,
+) -> tuple[str, list[str]]:
+    current_message = regeneration_prompt or ""
+    if not current_message:
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                current_message = _plain_message_text(message.get("content"))
+                break
+    mentioned_files = re.findall(
+        r"(?:^|\s)([./~]?[A-Za-z0-9_.\-/]+(?:\.[A-Za-z0-9_]+))",
+        current_message,
+    )[:12]
+    return current_message, mentioned_files
 
 
 # ── Pending input processing ────────────────────────────────
@@ -1083,6 +1111,11 @@ async def run_chat_task(
 
     # Load existing state so continuations don't overwrite previous output
     msg = await ChatMessage.get_by_id(message_id)
+    summary_message_id = message_id
+    if msg and msg.parent_id:
+        parent_msg = await ChatMessage.get_by_id(msg.parent_id)
+        if parent_msg and parent_msg.role == "user":
+            summary_message_id = parent_msg.id
     content = (msg.content or "") if msg else ""
     output_items: list[dict] = list(msg.output or []) if msg else []
     text_buffer = ""  # Accumulates text between tool calls
@@ -1150,8 +1183,16 @@ async def run_chat_task(
         chat_obj = await Chat.get_by_id(chat_id)
         chat_params = (chat_obj.meta or {}).get("params", {}) if chat_obj else {}
         configured_model = (msg.model if msg else None) or model
-        system = await _load_system_prompt(workspace, model, user_id=user_id)
         messages, loaded_summary = await _load_message_history(chat_id, message_id)
+        memory_message, memory_files = _memory_recall_inputs(messages, regeneration_prompt)
+        system = await _load_system_prompt(
+            workspace,
+            model,
+            user_id=user_id,
+            current_message=memory_message,
+            recent_messages=messages,
+            mentioned_files=memory_files,
+        )
         if loaded_summary:
             system += f"\n\n[CONVERSATION SUMMARY]\n{loaded_summary}"
         if regeneration_prompt:
@@ -1261,12 +1302,19 @@ async def run_chat_task(
                     api_type=api_type,
                 )
 
-                # Store on the current message — this IS the cutoff
-                await ChatMessage.update(message_id, chat_summary=summary)
+                await ChatMessage.update(summary_message_id, chat_summary=summary)
                 loaded_summary = summary
 
                 # Append summary to system prompt (works for all providers)
-                system = await _load_system_prompt(workspace, model, user_id=user_id)
+                memory_message, memory_files = _memory_recall_inputs(keep_zone, regeneration_prompt)
+                system = await _load_system_prompt(
+                    workspace,
+                    model,
+                    user_id=user_id,
+                    current_message=memory_message,
+                    recent_messages=keep_zone,
+                    mentioned_files=memory_files,
+                )
                 system += f"\n\n[CONVERSATION SUMMARY]\n{summary}"
                 # Re-inject attached skills after compaction (protect from pruning)
                 if attached_skill_ids:
@@ -1283,8 +1331,9 @@ async def run_chat_task(
                 new_messages_since = 0
 
                 logger.info(
-                    "[task %s] compacted: dropped %d msgs, kept %d, summary=%d chars",
+                    "[task %s] compacted: checkpoint=%s dropped %d msgs, kept %d, summary=%d chars",
                     message_id[:8],
+                    summary_message_id[:8],
                     len(drop_zone),
                     len(keep_zone),
                     len(summary),

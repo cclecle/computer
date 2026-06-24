@@ -59,7 +59,6 @@
 			toast.error('Failed to update memory');
 		}
 	}
-
 </script>
 
 <div class="flex flex-col h-full">
@@ -146,7 +145,6 @@
 						<p class="text-[11px] text-gray-400 dark:text-gray-600 -mt-1">{userUsage}</p>
 					</div>
 				{/if}
-
 			{/if}
 		</div>
 

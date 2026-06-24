@@ -9,9 +9,13 @@ from pydantic import BaseModel
 
 from cptr.utils.config import AuthResult, check_access
 from cptr.utils.memory import (
+    list_memory_files_state,
     remember,
+    read_memory_file_state,
     read_memory_state,
+    review_memory_vault,
     save_memory_settings,
+    search_memory_state,
 )
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
@@ -48,6 +52,21 @@ class MemoryUpdateRequest(BaseModel):
     workspace: str = ""
 
 
+class MemorySearchRequest(BaseModel):
+    query: str = ""
+    scope: Literal["user", "workspace", "both"] = "both"
+    workspace: str = ""
+    path: str | None = None
+    memory_id: str | None = None
+    expand_links: bool = False
+    include_trash: bool = False
+    limit: int = 8
+
+
+class MemoryReviewRequest(BaseModel):
+    workspace: str = ""
+
+
 @router.get("")
 async def get_memory(request: Request, workspace: str = Query("")):
     user_id = _get_user(request)
@@ -69,3 +88,64 @@ async def update_memory(body: MemoryUpdateRequest, request: Request):
         scope=body.scope,
         operations=body.operations,
     )
+
+
+@router.post("/search")
+async def search_memory(body: MemorySearchRequest, request: Request):
+    user_id = _get_user(request)
+    return await search_memory_state(
+        user_id=user_id,
+        workspace=body.workspace,
+        query=body.query,
+        scope=body.scope,
+        path=body.path,
+        memory_id=body.memory_id,
+        expand_links=body.expand_links,
+        include_trash=body.include_trash,
+        limit=body.limit,
+    )
+
+
+@router.get("/files")
+async def list_memory_files(
+    request: Request,
+    workspace: str = Query(""),
+    scope: Literal["user", "workspace", "both"] = Query("both"),
+    q: str = Query(""),
+    limit: int = Query(100),
+    include_trash: bool = Query(False),
+):
+    user_id = _get_user(request)
+    return await list_memory_files_state(
+        user_id=user_id,
+        workspace=workspace,
+        scope=scope,
+        query=q,
+        limit=limit,
+        include_trash=include_trash,
+    )
+
+
+@router.get("/file")
+async def get_memory_file(
+    request: Request,
+    workspace: str = Query(""),
+    scope: Literal["user", "workspace"] = Query("user"),
+    path: str = Query(...),
+):
+    user_id = _get_user(request)
+    try:
+        return await read_memory_file_state(
+            user_id=user_id,
+            workspace=workspace,
+            scope=scope,
+            path=path,
+        )
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.post("/review")
+async def review_memory(body: MemoryReviewRequest, request: Request):
+    user_id = _get_user(request)
+    return await review_memory_vault(user_id, body.workspace)
