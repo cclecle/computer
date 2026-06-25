@@ -155,6 +155,17 @@ def _sandbox_for_approval(value: str) -> str:
     return "workspace-write"
 
 
+def _codex_turn_options(chat_params: dict[str, Any]) -> dict[str, str]:
+    options: dict[str, str] = {}
+    effort = chat_params.get("reasoningEffort") or chat_params.get("reasoning_effort")
+    if isinstance(effort, str) and effort.strip():
+        options["effort"] = effort.strip()
+    service_tier = chat_params.get("serviceTier") or chat_params.get("service_tier")
+    if isinstance(service_tier, str) and service_tier.strip():
+        options["serviceTier"] = service_tier.strip()
+    return options
+
+
 def _tool_from_item_event(method: str, params: dict[str, Any]) -> AgentToolUpdate | None:
     if method not in {"item/started", "item/completed"}:
         return None
@@ -262,6 +273,7 @@ async def run_codex_agent(
             {
                 "threadId": thread_id,
                 "input": turn_input,
+                **_codex_turn_options(chat_params),
             },
         )
         turn = turn_response.get("result", {}).get("turn", {})

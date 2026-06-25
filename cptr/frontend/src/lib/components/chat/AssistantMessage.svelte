@@ -280,18 +280,6 @@
 		return cleaned.replace(/\n{3,}/g, '\n\n').trim();
 	}
 
-	function isPseudoAgentMessageTool(item: any): boolean {
-		const title = String(item?.arguments?.title || item?.arguments?.item?.type || '').toLowerCase();
-		return (
-			item?.name === 'agent_tool' &&
-			(title === 'usermessage' ||
-				title === 'agentmessage' ||
-				title === 'assistantmessage' ||
-				title === 'assistant message' ||
-				title === 'user message')
-		);
-	}
-
 	const displayItems = $derived.by((): DisplayItem[] => {
 		if (!output?.length) return [];
 
@@ -327,7 +315,6 @@
 
 		for (const item of output) {
 			if (item.type === 'function_call') {
-				if (isPseudoAgentMessageTool(item)) continue;
 				ensureGroup();
 				currentGroup!.entries.push(item);
 				currentGroup!.calls.push(item);
