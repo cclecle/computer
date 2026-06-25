@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { activeTab } from '$lib/stores';
+	import { i18next } from '$lib/i18n';
 
 	let visible = $state(false);
 	let ctrlHeld = $state(false);
+	let dictating = $state(false);
+	let dictationRecognition: any = null;
 	let touchHandled = false;
 
 	// Show on touch devices when terminal is active
@@ -51,9 +54,74 @@
 		window.dispatchEvent(new CustomEvent('cptr:terminal-input', { detail: key }));
 	}
 
+	function startDictation() {
+		const SpeechRecognition =
+			(window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+		if (!SpeechRecognition) {
+			alert(i18next.t('chat.dictate.unsupported'));
+			return;
+		}
+
+		const recognition = new SpeechRecognition();
+		dictationRecognition = recognition;
+		recognition.continuous = true;
+		recognition.interimResults = false;
+		recognition.lang = navigator.language || 'en-US';
+
+		recognition.onresult = (event: any) => {
+			let text = '';
+			for (let i = event.resultIndex; i < event.results.length; i++) {
+				const result = event.results[i];
+				if (result?.isFinal) text += ` ${result[0]?.transcript || ''}`;
+			}
+			text = text.trim();
+			if (text) sendKey(text);
+		};
+
+		recognition.onerror = () => {
+			dictating = false;
+			dictationRecognition = null;
+		};
+
+		recognition.onend = () => {
+			dictating = false;
+			dictationRecognition = null;
+		};
+
+		try {
+			recognition.start();
+			dictating = true;
+		} catch {
+			dictating = false;
+			dictationRecognition = null;
+		}
+	}
+
+	function stopDictation() {
+		const recognition = dictationRecognition;
+		dictationRecognition = null;
+		dictating = false;
+		try {
+			recognition?.stop();
+		} catch {}
+	}
+
+	function toggleDictation() {
+		if (dictating) stopDictation();
+		else startDictation();
+	}
+
 	function toggleCtrl() {
 		ctrlHeld = !ctrlHeld;
 	}
+
+	$effect(() => {
+		if (!visible && dictating) stopDictation();
+	});
+
+	$effect(() => {
+		return () => stopDictation();
+	});
 
 	const keys = [
 		{ label: 'Tab', value: '\t' },
@@ -73,6 +141,40 @@
 
 {#if visible}
 	<div class="shortcut-bar">
+		<button
+			class="key inline-flex items-center justify-center"
+			class:active={dictating}
+			aria-label="Dictate terminal input"
+			title="Dictate terminal input"
+			onmousedown={(e) => e.preventDefault()}
+			ontouchstart={(e) => {
+				e.preventDefault();
+				touchHandled = true;
+				toggleDictation();
+			}}
+			onclick={() => {
+				if (touchHandled) {
+					touchHandled = false;
+					return;
+				}
+				toggleDictation();
+			}}
+		>
+			<svg
+				class="size-3.5"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="1.75"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			>
+				<rect x="9" y="2" width="6" height="12" rx="3" />
+				<path d="M5 10a7 7 0 0 0 14 0" />
+				<line x1="12" y1="19" x2="12" y2="22" />
+				<line x1="8" y1="22" x2="16" y2="22" />
+			</svg>
+		</button>
 		{#each keys as key}
 			{#if key.value === '__ctrl__'}
 				<button
