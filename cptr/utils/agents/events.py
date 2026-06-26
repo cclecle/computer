@@ -26,6 +26,13 @@ class AgentToolUpdate:
 
 
 @dataclass
+class AgentToolOutputDelta:
+    call_id: str
+    delta: str
+    stream_kind: str = "tool_output"
+
+
+@dataclass
 class AgentDone:
     usage: dict[str, Any] | None = None
     resume_state: dict[str, Any] | None = None
@@ -36,4 +43,11 @@ class AgentError:
     message: str
 
 
-AgentEvent = AgentTextDelta | AgentReasoningDelta | AgentToolUpdate | AgentDone | AgentError
+AgentEvent = (
+    AgentTextDelta
+    | AgentReasoningDelta
+    | AgentToolUpdate
+    | AgentToolOutputDelta
+    | AgentDone
+    | AgentError
+)

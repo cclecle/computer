@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import json
 import os
 import re
+from collections import deque
 from contextlib import suppress
 from typing import Any, AsyncIterator
 
@@ -16,8 +18,12 @@ from cptr.utils.agents.events import (
     AgentEvent,
     AgentReasoningDelta,
     AgentTextDelta,
+    AgentToolOutputDelta,
     AgentToolUpdate,
 )
+
+CODEX_STDOUT_CHUNK_SIZE = 64 * 1024
+CODEX_MAX_WIRE_MESSAGE_CHARS = 16 * 1024 * 1024
 
 
 class CodexAppServer:
@@ -30,6 +36,8 @@ class CodexAppServer:
         self.stderr_task: asyncio.Task | None = None
         self.pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self.events: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self.stderr_tail: deque[str] = deque(maxlen=20)
+        self.approval_mode = "auto"
         self.next_id = 1
 
     async def start(self) -> None:
@@ -94,31 +102,111 @@ class CodexAppServer:
         self.proc.stdin.write((json.dumps(payload) + "\n").encode())
         await self.proc.stdin.drain()
 
+    async def respond(self, request_id: str | int, result: dict[str, Any]) -> None:
+        await self._send({"id": request_id, "result": result})
+
+    async def respond_error(self, request_id: str | int, code: int, message: str) -> None:
+        await self._send({"id": request_id, "error": {"code": code, "message": message}})
+
     async def _reader_loop(self) -> None:
         assert self.proc is not None and self.proc.stdout is not None
-        while True:
-            line = await self.proc.stdout.readline()
-            if not line:
-                break
-            try:
-                message = json.loads(line.decode())
-            except Exception:
-                continue
-            if (
-                "id" in message
-                and "method" not in message
-                and ("result" in message or "error" in message)
-            ):
-                future = self.pending.pop(int(message["id"]), None)
-                if future and not future.done():
-                    future.set_result(message)
+        reader_error: str | None = None
+        buffer = ""
+        decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        try:
+            while True:
+                chunk = await self.proc.stdout.read(CODEX_STDOUT_CHUNK_SIZE)
+                if not chunk:
+                    break
+                buffer += decoder.decode(chunk)
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    await self._handle_stdout_line(line.rstrip("\r"))
+                if len(buffer) > CODEX_MAX_WIRE_MESSAGE_CHARS:
+                    raise RuntimeError("Codex app-server emitted an oversized message")
+            buffer += decoder.decode(b"", final=True)
+            if buffer.strip():
+                await self._handle_stdout_line(buffer.rstrip("\r"))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - surfaced in the chat.
+            reader_error = str(exc)
+        finally:
+            if reader_error:
+                message = f"Codex app-server transport error: {reader_error}"
+                self._fail_pending(message)
+                await self.events.put({"method": "transport/error", "params": {"message": message}})
             else:
-                await self.events.put(message)
+                message = self._exit_message()
+                self._fail_pending(message)
+                await self.events.put({"method": "process/exited", "params": {"message": message}})
+
+    async def _handle_stdout_line(self, line: str) -> None:
+        if not line.strip():
+            return
+        if len(line) > CODEX_MAX_WIRE_MESSAGE_CHARS:
+            raise RuntimeError("Codex app-server emitted an oversized message")
+        message = json.loads(line)
+        if not isinstance(message, dict):
+            raise RuntimeError("Codex app-server emitted an invalid message")
+        await self._route_message(message)
+
+    async def _route_message(self, message: dict[str, Any]) -> None:
+        if "id" in message and "method" in message:
+            await self._handle_server_request(message)
+            return
+        if (
+            "id" in message
+            and "method" not in message
+            and ("result" in message or "error" in message)
+        ):
+            try:
+                request_id = int(message["id"])
+            except (TypeError, ValueError):
+                return
+            future = self.pending.pop(request_id, None)
+            if future and not future.done():
+                future.set_result(message)
+            return
+        if "method" in message:
+            await self.events.put(message)
+
+    async def _handle_server_request(self, message: dict[str, Any]) -> None:
+        request_id = message["id"]
+        method = str(message.get("method") or "")
+        if method in {
+            "item/commandExecution/requestApproval",
+            "item/fileChange/requestApproval",
+        }:
+            decision = "decline" if self.approval_mode == "ask" else "accept"
+            await self.respond(request_id, {"decision": decision})
+            return
+        if method in {"applyPatchApproval", "execCommandApproval"}:
+            decision = "denied" if self.approval_mode == "ask" else "approved"
+            await self.respond(request_id, {"decision": decision})
+            return
+        await self.respond_error(request_id, -32601, f"Method not found: {method}")
 
     async def _stderr_loop(self) -> None:
         assert self.proc is not None and self.proc.stderr is not None
-        while await self.proc.stderr.readline():
-            pass
+        while line := await self.proc.stderr.readline():
+            text = line.decode(errors="replace").strip()
+            if text:
+                self.stderr_tail.append(text[:2000])
+
+    def _fail_pending(self, message: str) -> None:
+        for future in self.pending.values():
+            if not future.done():
+                future.set_exception(RuntimeError(message))
+        self.pending.clear()
+
+    def _exit_message(self) -> str:
+        detail = "\n".join(self.stderr_tail).strip()
+        if detail:
+            return f"Codex app-server exited: {detail}"
+        if self.proc and self.proc.returncode is not None:
+            return f"Codex app-server exited with code {self.proc.returncode}."
+        return "Codex app-server exited."
 
 
 def _messages_to_prompt(messages: list[dict[str, Any]]) -> str:
@@ -186,7 +274,7 @@ def _tool_from_item_event(method: str, params: dict[str, Any]) -> AgentToolUpdat
         arguments={"command": detail}
         if "command" in normalized_type and detail
         else {"title": title},
-        output=detail if method == "item/completed" else None,
+        output=None,
     )
 
 
@@ -219,6 +307,24 @@ def _item_detail(item: dict[str, Any]) -> str | None:
     return None
 
 
+def _tool_output_from_event(method: str, params: dict[str, Any]) -> AgentToolOutputDelta | None:
+    if method not in {"item/commandExecution/outputDelta", "item/fileChange/outputDelta"}:
+        return None
+    call_id = params.get("itemId")
+    delta = params.get("delta")
+    if not isinstance(call_id, str) or not call_id.strip():
+        return None
+    if not isinstance(delta, str) or not delta:
+        return None
+    return AgentToolOutputDelta(
+        call_id=call_id.strip(),
+        delta=delta,
+        stream_kind="command_output"
+        if method == "item/commandExecution/outputDelta"
+        else "file_change_output",
+    )
+
+
 async def run_codex_agent(
     *,
     profile: dict[str, Any],
@@ -238,8 +344,9 @@ async def run_codex_agent(
     thread_id: str | None = None
     turn_id: str | None = None
     try:
-        await client.start()
         approval_mode = _chat_approval_mode(chat_params)
+        client.approval_mode = approval_mode
+        await client.start()
         thread_params: dict[str, Any] = {
             "cwd": workspace,
             "approvalPolicy": _approval_policy(approval_mode),
@@ -295,9 +402,13 @@ async def run_codex_agent(
                 if isinstance(delta, str) and delta:
                     yield AgentReasoningDelta(delta)
             else:
-                tool = _tool_from_item_event(str(method or ""), params)
-                if tool:
-                    yield tool
+                tool_output = _tool_output_from_event(str(method or ""), params)
+                if tool_output:
+                    yield tool_output
+                else:
+                    tool = _tool_from_item_event(str(method or ""), params)
+                    if tool:
+                        yield tool
             if method == "turn/completed":
                 yield AgentDone(
                     resume_state={
@@ -315,6 +426,12 @@ async def run_codex_agent(
                 return
             elif method == "error":
                 yield AgentError(str(params or "Codex app-server error"))
+                return
+            elif method == "process/exited":
+                yield AgentError(str(params.get("message") or "Codex app-server exited."))
+                return
+            elif method == "transport/error":
+                yield AgentError(str(params.get("message") or "Codex app-server transport error"))
                 return
     except asyncio.CancelledError:
         if thread_id and turn_id:

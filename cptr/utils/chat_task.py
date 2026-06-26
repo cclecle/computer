@@ -11,7 +11,7 @@ import logging
 import re
 import uuid
 
-from cptr.env import CHAT_MAX_ITERATIONS, CHAT_TOOL_MAX_CHARS
+from cptr.env import CHAT_MAX_ITERATIONS, CHAT_TOOL_COMMAND_MAX_CHARS, CHAT_TOOL_MAX_CHARS
 from cptr.utils.context import resolve_compact_token_threshold, should_compact
 from cptr.utils.skills import discover_skills, load_skill, format_skill_content
 from cptr.utils.summarize import summarize_messages
@@ -35,6 +35,7 @@ from cptr.utils.agents.events import (
     AgentError,
     AgentReasoningDelta,
     AgentTextDelta,
+    AgentToolOutputDelta,
     AgentToolUpdate,
 )
 from cptr.utils.agents.attachments import prepare_agent_attachments
@@ -1014,6 +1015,19 @@ def _is_native_agent_tool_item(item: dict) -> bool:
     )
 
 
+def _append_capped_output(existing: str, delta: str, max_chars: int) -> str:
+    text = f"{existing or ''}{delta}"
+    if len(text) <= max_chars:
+        return text
+    marker = "\n\n...(truncated native agent output)...\n\n"
+    if max_chars <= len(marker) + 2:
+        return text[:max_chars]
+    keep = max_chars - len(marker)
+    head = keep // 2
+    tail = keep - head
+    return f"{text[:head]}{marker}{text[-tail:]}"
+
+
 def _append_prompt_suffix(messages: list[dict], suffix: str) -> None:
     if not suffix:
         return
@@ -1366,15 +1380,92 @@ async def run_chat_task(
                 }
                 _upsert_output_item(output_items, call_item)
                 await emit(output=call_item)
-                if event.output is not None or event.status == "completed":
+                if event.output is not None:
+                    capped_event_output = None
+                    output_limit = (
+                        CHAT_TOOL_COMMAND_MAX_CHARS
+                        if call_item["name"] == "run_command"
+                        else CHAT_TOOL_MAX_CHARS
+                    )
+                    capped_event_output = _append_capped_output("", event.output, output_limit)
+                    existing_output = next(
+                        (
+                            item
+                            for item in output_items
+                            if item.get("type") == "function_call_output"
+                            and item.get("call_id") == event.call_id
+                        ),
+                        None,
+                    )
+                    if (
+                        existing_output
+                        and existing_output.get("output")
+                        and capped_event_output is not None
+                    ):
+                        _sync_state()
+                        continue
                     output_item = {
                         "type": "function_call_output",
                         "call_id": event.call_id,
                         "native_agent": True,
-                        "output": event.output or "",
+                        "output": capped_event_output or "",
                     }
                     _upsert_output_item(output_items, output_item)
                     await emit(output=output_item)
+                _sync_state()
+            elif isinstance(event, AgentToolOutputDelta):
+                flushed_item = _flush_text()
+                if flushed_item:
+                    await emit(output=flushed_item)
+                existing_call = next(
+                    (
+                        item
+                        for item in output_items
+                        if item.get("type") == "function_call"
+                        and item.get("call_id") == event.call_id
+                    ),
+                    None,
+                )
+                if existing_call is None:
+                    existing_call = {
+                        "type": "function_call",
+                        "id": f"agent-{event.call_id}",
+                        "call_id": event.call_id,
+                        "name": "run_command"
+                        if event.stream_kind == "command_output"
+                        else "agent_tool",
+                        "native_agent": True,
+                        "arguments": {},
+                        "status": "in_progress",
+                    }
+                    _upsert_output_item(output_items, existing_call)
+                    await emit(output=existing_call)
+                existing_output = next(
+                    (
+                        item
+                        for item in output_items
+                        if item.get("type") == "function_call_output"
+                        and item.get("call_id") == event.call_id
+                    ),
+                    {},
+                )
+                max_chars = (
+                    CHAT_TOOL_COMMAND_MAX_CHARS
+                    if event.stream_kind == "command_output"
+                    else CHAT_TOOL_MAX_CHARS
+                )
+                output_item = {
+                    "type": "function_call_output",
+                    "call_id": event.call_id,
+                    "native_agent": True,
+                    "output": _append_capped_output(
+                        str(existing_output.get("output") or ""),
+                        event.delta,
+                        max_chars,
+                    ),
+                }
+                _upsert_output_item(output_items, output_item)
+                await emit(output=output_item)
                 _sync_state()
             elif isinstance(event, AgentError):
                 raise RuntimeError(event.message)
