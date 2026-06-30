@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-06-29
+
+### Changed
+
+- 🔧 **Better formatting for tool call output.** JSON data shown in tool call results and request parameters is now pretty-printed with proper indentation, making it much easier to read at a glance.
+- 🤖 **More compatible agent communication.** Fixed how Computer talks to coding agents so it works with a wider range of agent versions.
+
 ## [0.7.1] - 2026-06-26
 
 ### Changed
