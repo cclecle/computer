@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 import logging
 from contextlib import AsyncExitStack
 
@@ -118,22 +119,26 @@ class MCPClient:
         specs = []
 
         for tool in result.tools:
-            spec = {
-                "name": tool.name,
-                "description": tool.description or "",
-                "parameters": {
+            if tool.inputSchema is not None:
+                parameters = deepcopy(tool.inputSchema)
+                if not isinstance(parameters, dict):
+                    parameters = dict(parameters)
+                parameters.setdefault("type", "object")
+                parameters.setdefault("properties", {})
+            else:
+                parameters = {
                     "type": "object",
                     "properties": {},
                     "required": [],
-                },
-            }
+                }
 
-            if tool.inputSchema:
-                schema = tool.inputSchema
-                spec["parameters"]["properties"] = schema.get("properties", {})
-                spec["parameters"]["required"] = schema.get("required", [])
-
-            specs.append(spec)
+            specs.append(
+                {
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "parameters": parameters,
+                }
+            )
 
         return specs
 
