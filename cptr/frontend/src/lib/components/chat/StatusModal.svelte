@@ -1,20 +1,49 @@
 <script lang="ts">
 	import Modal from '../Modal.svelte';
+	import Terminal from '../Terminal.svelte';
+	import DropdownMenu from '../DropdownMenu.svelte';
+	import Icon from '../Icon.svelte';
 	import type { ContextUsage } from '$lib/apis/chat';
+	import type { CommandSession } from '$lib/apis/terminal';
 	import { t } from '$lib/i18n';
 
 	interface Props {
 		chatId: string | null;
 		contextUsage: ContextUsage | null;
+		commandSessions?: CommandSession[];
+		queuedMessages?: { id: string; content: string }[];
+		initialCommandSessionId?: string | null;
+		anchor: HTMLElement | { x: number; y: number };
 		onclose: () => void;
 	}
 
-	let { chatId, contextUsage, onclose }: Props = $props();
+	let {
+		chatId,
+		contextUsage,
+		commandSessions = [],
+		queuedMessages = [],
+		initialCommandSessionId = null,
+		anchor,
+		onclose
+	}: Props = $props();
 
 	let copied = $state(false);
+	let selectedSessionId = $state<string | null>(null);
+	let appliedInitialSessionId = $state<string | null>(null);
+	let missingSessionId = $state<string | null>(null);
+	let forceStopSignal = $state(0);
+
+	const runningSessions = $derived(commandSessions.filter((session) => !session.done));
+	const selectedSession = $derived(
+		runningSessions.find((session) => session.command_session_id === selectedSessionId) ?? null
+	);
 	const contextPercent = $derived(Math.max(0, Math.round(contextUsage?.percent ?? 0)));
-	const progressWidth = $derived(`${Math.min(contextPercent, 100)}%`);
-	const tokenCount = $derived(contextUsage?.tokens ?? contextUsage?.estimated_tokens ?? 0);
+	const contextValue = $derived(
+		contextUsage
+			? `${contextPercent}% ${formatTokenCount(contextUsage.estimated_tokens || contextUsage.tokens)}/${formatTokenCount(contextUsage.threshold)}`
+			: $t('chat.statusUnknown')
+	);
+	const contextBarPercent = $derived(Math.min(contextPercent, 100));
 
 	function copyChatId() {
 		if (!chatId) return;
@@ -22,57 +51,183 @@
 		copied = true;
 		setTimeout(() => (copied = false), 1600);
 	}
+
+	function elapsedLabel(ts: number): string {
+		const seconds = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m`;
+		return `${Math.floor(minutes / 60)}h`;
+	}
+
+	function shortCommand(command: string): string {
+		return command.length > 92 ? `${command.slice(0, 92)}...` : command;
+	}
+
+	function formatTokenCount(value: number): string {
+		if (value >= 1_000_000) return `${trimNumber(value / 1_000_000)}m`;
+		if (value >= 1_000) return `${trimNumber(value / 1_000)}k`;
+		return String(value);
+	}
+
+	function trimNumber(value: number): string {
+		return value >= 10 ? String(Math.round(value)) : value.toFixed(1).replace(/\.0$/, '');
+	}
+
+	function sessionLabel(session: CommandSession): string {
+		return session.command_session_id;
+	}
+
+	function statusLabel(session: CommandSession): string {
+		if (!session.done) return elapsedLabel(session.created_at);
+		if (session.exit_code && session.exit_code !== 0) return `Failed ${session.exit_code}`;
+		return 'Finished';
+	}
+
+	$effect(() => {
+		if (!initialCommandSessionId) return;
+		const exists = runningSessions.some(
+			(session) => session.command_session_id === initialCommandSessionId
+		);
+		if (exists) {
+			selectedSessionId = initialCommandSessionId;
+			appliedInitialSessionId = initialCommandSessionId;
+			missingSessionId = null;
+		} else if (initialCommandSessionId !== appliedInitialSessionId) {
+			selectedSessionId = null;
+			appliedInitialSessionId = initialCommandSessionId;
+			missingSessionId = initialCommandSessionId;
+		}
+	});
 </script>
 
-<Modal {onclose} class="w-full max-w-[300px] mx-4">
-	<div class="px-4 py-3.5">
-		<div class="flex items-baseline justify-between gap-3 mb-4">
-			<h2 class="text-sm font-medium text-gray-900 dark:text-white">
-				{$t('chat.commandStatus')}
-			</h2>
-			<span class="text-[11px] font-mono text-gray-400 dark:text-gray-600">
-				{contextUsage ? `${contextPercent}%` : $t('chat.statusUnknown')}
-			</span>
-		</div>
-
-		<div class="mb-4">
-			<div class="h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-white/6">
-				<div
-					class="h-full rounded-full bg-gray-900 dark:bg-white transition-[width] duration-200"
-					style={`width: ${progressWidth};`}
-				></div>
-			</div>
-			<div class="mt-1.5 flex items-baseline justify-between gap-3">
-				<span class="text-[10px] text-gray-400 dark:text-gray-600">
-					{$t('chat.statusEstimated')}
-				</span>
-				<span class="font-mono text-[10px] text-gray-400 dark:text-gray-600">
-					{#if contextUsage}
-						{tokenCount.toLocaleString()} / {contextUsage.threshold.toLocaleString()}
-					{:else}
-						{$t('chat.statusUnknown')}
-					{/if}
-				</span>
-			</div>
-		</div>
-
-		<div>
-			<div class="text-[10px] text-gray-400 dark:text-gray-600 mb-1">
-				{$t('chat.statusChatId')}
-			</div>
-			{#if chatId}
+{#if selectedSession}
+	<Modal
+		{onclose}
+		class="mx-4 flex h-[min(760px,82dvh)] w-full max-w-[min(960px,calc(100vw-2rem))] flex-col overflow-hidden max-sm:mx-0 max-sm:h-[100dvh] max-sm:max-w-none max-sm:rounded-none"
+	>
+		<div class="flex h-full min-h-0 flex-col overflow-hidden">
+			<div class="flex h-9 shrink-0 items-center gap-3 border-b border-gray-100 px-3 dark:border-white/8">
 				<button
 					type="button"
-					class="block w-full text-left font-mono text-[11px] leading-relaxed text-gray-700 dark:text-gray-300 break-all hover:text-gray-900 dark:hover:text-white transition-colors"
-					onclick={copyChatId}
+					class="flex h-7 shrink-0 items-center gap-1.5 rounded-lg pr-2 text-xs text-gray-400 transition-colors duration-75 hover:text-gray-700 dark:text-gray-600 dark:hover:text-gray-300"
+					onclick={onclose}
 				>
-					{copied ? $t('about.copied') : chatId}
+					<Icon name="chevron-left" size={12} />
+					<span>Back</span>
 				</button>
-			{:else}
-				<div class="font-mono text-[11px] leading-relaxed text-gray-700 dark:text-gray-300">
-					{$t('chat.statusNoChat')}
+				<div class="min-w-0 flex-1">
+					<div class="truncate font-mono text-xs font-medium text-gray-900 dark:text-white">
+						{sessionLabel(selectedSession)}
+					</div>
+				</div>
+				<button
+					type="button"
+					class="h-7 shrink-0 px-1.5 text-xs text-gray-400 underline-offset-2 transition-colors duration-75 hover:text-gray-700 hover:underline dark:text-gray-600 dark:hover:text-gray-200"
+					title="Force terminate"
+					onclick={() => (forceStopSignal += 1)}
+				>
+					Terminate
+				</button>
+			</div>
+			<div class="min-h-0 flex-1 bg-white dark:bg-black">
+				<Terminal
+					wsPath={`/api/terminal/sessions/${selectedSession.command_session_id}/ws`}
+					initialOutput={selectedSession.output ?? ''}
+					initialOffset={selectedSession.total_bytes ?? 0}
+					{forceStopSignal}
+					readOnly={true}
+				/>
+			</div>
+		</div>
+	</Modal>
+{:else}
+	<DropdownMenu
+		items={[]}
+		{anchor}
+		{onclose}
+		align="end"
+		className="w-80 max-w-[calc(100vw-1.5rem)] p-0"
+	>
+		<div class="max-h-[70dvh] overflow-y-auto px-1 py-0.5 text-xs sm:max-h-[min(72dvh,520px)]">
+			{#if missingSessionId}
+				<div
+					class="rounded-xl px-1.5 py-1.5 text-[11px] leading-relaxed text-gray-400 dark:text-gray-600"
+				>
+					Live session unavailable. Saved output remains in the chat.
 				</div>
 			{/if}
+
+			{#if runningSessions.length}
+				<section>
+					<div
+						class="px-1.5 pb-0.5 pt-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-400 dark:text-gray-600"
+					>
+						Sessions
+					</div>
+					{#each runningSessions as session}
+						<div class="flex h-7 min-w-0 items-center gap-3 rounded-xl px-1.5 text-gray-600 dark:text-gray-400">
+							<button
+								type="button"
+								class="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-gray-400 underline-offset-2 transition-colors duration-75 hover:text-gray-700 hover:underline dark:text-gray-600 dark:hover:text-gray-200"
+								title={shortCommand(session.command)}
+								onclick={() => (selectedSessionId = session.command_session_id)}
+							>
+								{sessionLabel(session)}
+							</button>
+							<span class="shrink-0 text-[10px] text-gray-400 dark:text-gray-600">
+								{statusLabel(session)}
+							</span>
+						</div>
+					{/each}
+				</section>
+			{/if}
+
+			<section>
+				<div class="rounded-xl px-1.5 py-1.5 text-gray-600 dark:text-gray-400">
+					<div class="flex h-5 items-center gap-3">
+						<span class="min-w-0 flex-1 truncate">Context</span>
+						<span class="shrink-0 font-mono text-[10px] text-gray-400 dark:text-gray-600">
+							{contextValue}
+						</span>
+					</div>
+					<div class="mt-2 h-px overflow-hidden rounded-full bg-gray-100 dark:bg-white/8">
+						<div
+							class="h-full rounded-full bg-gray-300 dark:bg-white/20"
+							style={`width: ${contextBarPercent}%`}
+						></div>
+					</div>
+				</div>
+
+				{#if queuedMessages.length}
+					<div class="flex h-7 items-center gap-3 rounded-xl px-1.5 text-gray-600 dark:text-gray-400">
+						<span class="min-w-0 flex-1 truncate">Queued messages</span>
+						<span class="font-mono text-[10px] text-gray-400 dark:text-gray-600">
+							{queuedMessages.length}
+						</span>
+					</div>
+				{/if}
+
+				{#if chatId}
+					<div class="flex h-7 items-center gap-3 rounded-xl px-1.5 text-gray-600 dark:text-gray-400">
+						<span class="min-w-0 flex-1 truncate">Chat ID</span>
+						<button
+							type="button"
+							class="min-w-0 max-w-[11rem] truncate font-mono text-[10px] text-gray-400 underline-offset-2 transition-colors duration-75 hover:text-gray-700 hover:underline dark:text-gray-600 dark:hover:text-gray-200"
+							onclick={copyChatId}
+						>
+							{copied ? $t('about.copied') : chatId}
+						</button>
+					</div>
+				{:else}
+					<div class="flex h-7 items-center gap-3 rounded-xl px-1.5 text-gray-600 dark:text-gray-400">
+						<span class="min-w-0 flex-1 truncate">Chat ID</span>
+						<span class="font-mono text-[10px] text-gray-400 dark:text-gray-600">
+							{$t('chat.statusNoChat')}
+						</span>
+					</div>
+				{/if}
+			</section>
 		</div>
-	</div>
-</Modal>
+	</DropdownMenu>
+{/if}

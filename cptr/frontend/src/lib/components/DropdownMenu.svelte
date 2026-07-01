@@ -45,6 +45,8 @@
 		footerDivider?: boolean;
 		/** Optional snippet rendered when items array is empty. */
 		empty?: Snippet;
+		/** Optional custom dropdown content. */
+		children?: Snippet;
 		/** Additional CSS classes for the menu container. */
 		className?: string;
 		/** Horizontal alignment relative to anchor: 'start' (left) or 'end' (right). */
@@ -65,6 +67,7 @@
 		headerDivider = true,
 		footerDivider = true,
 		empty,
+		children,
 		className = '',
 		align = 'start'
 	}: Props = $props();
@@ -355,7 +358,9 @@
 	{/if}
 
 	<div class="flex-1 min-h-0 overflow-y-auto" style={maxHeight ? `max-height: ${maxHeight};` : ''}>
-		{#if items.length === 0 && empty}
+		{#if children}
+			{@render children()}
+		{:else if items.length === 0 && empty}
 			{@render empty()}
 		{:else}
 			{#each items as item}

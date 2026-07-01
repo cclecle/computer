@@ -1916,7 +1916,11 @@ async def run_chat_task(
                     if tc["name"] == "create_artifact":
                         result = await create_artifact(**tc["arguments"], workspace=workspace)
                     else:
-                        result = await execute_tool(tc["name"], tc["arguments"], tool_ctx)
+                        result = await execute_tool(
+                            tc["name"],
+                            tc["arguments"],
+                            {**tool_ctx, "call_id": tc["call_id"]},
+                        )
 
                     # Append output BEFORE marking completed — if anything
                     # between here and persist fails, the call stays
@@ -1965,7 +1969,11 @@ async def run_chat_task(
                     for idx in delegate_indices:
                         tc, _ = call_items[idx]
                         task = asyncio.create_task(
-                            execute_tool(tc["name"], tc["arguments"], tool_ctx)
+                            execute_tool(
+                                tc["name"],
+                                tc["arguments"],
+                                {**tool_ctx, "call_id": tc["call_id"]},
+                            )
                         )
                         inflight[task] = idx
 

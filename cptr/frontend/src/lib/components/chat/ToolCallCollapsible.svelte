@@ -46,7 +46,6 @@
 			return pairedOutput.output;
 		}
 	});
-
 	function toggleExpanded() {
 		expanded = !expanded;
 	}
@@ -57,6 +56,7 @@
 			toggleExpanded();
 		}
 	}
+
 </script>
 
 <div class="w-full min-w-0 flex flex-col">
@@ -178,7 +178,7 @@
 					>
 				</span>
 			{:else}
-				<div class="flex shrink-0 self-center translate-y-[1px]">
+				<div class="flex shrink-0 items-center gap-1 self-center">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						fill="none"

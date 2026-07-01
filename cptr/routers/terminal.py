@@ -12,6 +12,15 @@ from pydantic import BaseModel
 
 from cptr.utils.config import check_access, get_auth_mode, get_user_uid_gid, AuthMode
 from cptr.utils.terminal import manager, IS_WINDOWS
+from cptr.utils.tools import (
+    command_session_bytes_since,
+    drain_command_session_input,
+    get_command_session,
+    list_command_sessions,
+    resize_command_session,
+    send_command_session_input,
+    stop_command_session,
+)
 
 logger = logging.getLogger("cptr.terminal")
 
@@ -27,6 +36,22 @@ class CreateSessionRequest(BaseModel):
 class SessionInfo(BaseModel):
     session_id: str
     cwd: str
+
+
+class CommandSessionInfo(BaseModel):
+    command_session_id: str
+    task_id: str
+    workspace: str
+    chat_id: str | None = None
+    message_id: str | None = None
+    call_id: str | None = None
+    command: str
+    created_at: float
+    status: str
+    done: bool
+    exit_code: int | None = None
+    total_bytes: int
+    output: str = ""
 
 
 @router.post("", response_model=SessionInfo)
@@ -48,6 +73,12 @@ async def list_sessions():
     return [SessionInfo(**s) for s in sessions]
 
 
+@router.get("/sessions", response_model=List[CommandSessionInfo])
+async def list_command_session_endpoint(workspace: str | None = None, chat_id: str | None = None):
+    """List live command sessions created by run_command."""
+    return [CommandSessionInfo(**s) for s in list_command_sessions(workspace, chat_id)]
+
+
 @router.delete("/{session_id}")
 async def delete_session(session_id: str):
     """Kill a terminal session."""
@@ -55,6 +86,114 @@ async def delete_session(session_id: str):
     if not manager.close(session_id):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "closed"}
+
+
+@router.websocket("/sessions/{command_session_id}/ws")
+async def command_session_ws(websocket: WebSocket, command_session_id: str):
+    """WebSocket endpoint for command-session I/O.
+
+    Uses the same compact binary client protocol as normal terminals:
+        0x00 + raw input bytes
+        0x02 + uint16 cols + uint16 rows
+        0x03 stop
+    Server → Client: raw command output bytes.
+    """
+    client_host = websocket.client.host if websocket.client else "127.0.0.1"
+    token = websocket.cookies.get("cptr_session") or websocket.query_params.get("token")
+    auth = check_access(client_host=client_host, jwt_token=token)
+    if auth is None:
+        await websocket.close(code=4001, reason="unauthorized")
+        return
+
+    session = get_command_session(command_session_id)
+    if not session:
+        await websocket.close(code=4004, reason="Command session not found")
+        return
+
+    await websocket.accept()
+
+    MSG_INPUT = 0
+    MSG_RESIZE = 2
+    MSG_STOP = 3
+    MSG_FORCE_STOP = 4
+
+    try:
+        initial_offset = max(0, int(websocket.query_params.get("offset", "0")))
+    except ValueError:
+        initial_offset = 0
+
+    async def stream_output():
+        offset = initial_offset
+        try:
+            while True:
+                session = get_command_session(command_session_id)
+                if not session:
+                    break
+                raw, offset = command_session_bytes_since(session, offset)
+                if raw:
+                    await websocket.send_bytes(raw)
+                if session.get("done"):
+                    break
+                condition = session["condition"]
+                async with condition:
+                    await condition.wait_for(
+                        lambda: (
+                            session.get("done") or int(session.get("total_bytes") or 0) != offset
+                        )
+                    )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error("command session stream error for %s: %s", command_session_id, e)
+
+    stream_task = asyncio.create_task(stream_output())
+
+    try:
+        while True:
+            raw = await websocket.receive_bytes()
+            if len(raw) < 1:
+                continue
+
+            msg_type = raw[0]
+            payload = raw[1:]
+
+            if msg_type == MSG_INPUT:
+                error = send_command_session_input(command_session_id, payload)
+                if error:
+                    logger.debug(
+                        "command session input ignored for %s: %s", command_session_id, error
+                    )
+                await drain_command_session_input(command_session_id)
+            elif msg_type == MSG_RESIZE:
+                try:
+                    if len(payload) == 4:
+                        cols = int.from_bytes(payload[0:2], "big")
+                        rows = int.from_bytes(payload[2:4], "big")
+                    else:
+                        import json as _json
+
+                        resize_data = _json.loads(payload)
+                        cols = resize_data.get("cols", 80)
+                        rows = resize_data.get("rows", 24)
+                    resize_command_session(command_session_id, rows, cols)
+                except (ValueError, KeyError) as e:
+                    logger.warning(
+                        "Invalid command-session resize payload for %s: %s", command_session_id, e
+                    )
+            elif msg_type == MSG_STOP:
+                stop_command_session(command_session_id)
+            elif msg_type == MSG_FORCE_STOP:
+                stop_command_session(command_session_id, force=True)
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected for command session %s", command_session_id)
+    except Exception as e:
+        logger.error("WebSocket error for command session %s: %s", command_session_id, e)
+    finally:
+        stream_task.cancel()
+        try:
+            await stream_task
+        except asyncio.CancelledError:
+            pass
 
 
 @router.websocket("/{session_id}/ws")

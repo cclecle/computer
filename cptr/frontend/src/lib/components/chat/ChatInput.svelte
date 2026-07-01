@@ -10,7 +10,11 @@
 	import { toast } from 'svelte-sonner';
 
 	import { createFileMention, extractMentionedFiles, type FileMentionAttrs } from './FileMention';
-	import { createSkillMention, extractMentionedSkills, type SkillMentionAttrs } from './SkillMention';
+	import {
+		createSkillMention,
+		extractMentionedSkills,
+		type SkillMentionAttrs
+	} from './SkillMention';
 	import FileSuggestionPopup from './FileSuggestionPopup.svelte';
 	import SkillSuggestionPopup from './SkillSuggestionPopup.svelte';
 	import { searchFiles } from '$lib/apis/files';
@@ -43,7 +47,9 @@
 		try {
 			if ('wakeLock' in navigator) {
 				voiceWakeLock = await navigator.wakeLock.request('screen');
-				voiceWakeLock.addEventListener('release', () => { voiceWakeLock = null; });
+				voiceWakeLock.addEventListener('release', () => {
+					voiceWakeLock = null;
+				});
 			}
 		} catch {}
 	}
@@ -124,7 +130,9 @@
 	};
 
 	// ── File Uploads ────────────────────────────────
-	let attachedUploads = $state<{ id: string; name: string; url: string; type: string; loading?: boolean }[]>([]);
+	let attachedUploads = $state<
+		{ id: string; name: string; url: string; type: string; loading?: boolean }[]
+	>([]);
 	let isDragging = $state(false);
 
 	async function processFiles(files: File[]) {
@@ -133,21 +141,21 @@
 			const isImage = file.type.startsWith('image/');
 			const type = isImage ? 'image' : 'file';
 			attachedUploads = [...attachedUploads, { id, name: file.name, url: '', type, loading: true }];
-			
+
 			try {
 				const form = new FormData();
 				form.append('file', file);
 				const res = await uploadFile(form);
 				if (res && res.id) {
-					attachedUploads = attachedUploads.map(u => 
+					attachedUploads = attachedUploads.map((u) =>
 						u.id === id ? { ...u, id: res.id, url: res.url, loading: false } : u
 					);
 				} else {
-					attachedUploads = attachedUploads.filter(u => u.id !== id);
+					attachedUploads = attachedUploads.filter((u) => u.id !== id);
 				}
 			} catch (err) {
-				console.error("Upload failed", err);
-				attachedUploads = attachedUploads.filter(u => u.id !== id);
+				console.error('Upload failed', err);
+				attachedUploads = attachedUploads.filter((u) => u.id !== id);
 			}
 		}
 	}
@@ -177,7 +185,7 @@
 	}
 
 	function removeUpload(id: string) {
-		attachedUploads = attachedUploads.filter(u => u.id !== id);
+		attachedUploads = attachedUploads.filter((u) => u.id !== id);
 	}
 
 	// ── @file mention suggestion ────────────────────
@@ -344,7 +352,7 @@
 					id: s.name,
 					label: s.name,
 					description: s.description,
-					source: s.source,
+					source: s.source
 				}));
 			}
 			if (!query) return cachedSkills;
@@ -363,7 +371,9 @@
 		onselect: (i: number) => void
 	) {
 		if (skillPopupComponent) {
-			try { unmount(skillPopupComponent); } catch {}
+			try {
+				unmount(skillPopupComponent);
+			} catch {}
 			skillPopupComponent = null;
 		}
 		if (!skillPopupEl) {
@@ -433,7 +443,8 @@
 					return true;
 				}
 				if (event.key === 'ArrowUp') {
-					selectedIndex = (selectedIndex - 1 + currentItems.length) % Math.max(currentItems.length, 1);
+					selectedIndex =
+						(selectedIndex - 1 + currentItems.length) % Math.max(currentItems.length, 1);
 					remount();
 					return true;
 				}
@@ -468,7 +479,9 @@
 		stopSkillRepositionLoop();
 		skillActiveClientRectFn = null;
 		if (skillPopupComponent) {
-			try { unmount(skillPopupComponent); } catch {}
+			try {
+				unmount(skillPopupComponent);
+			} catch {}
 			skillPopupComponent = null;
 		}
 		if (skillPopupEl) {
@@ -594,7 +607,7 @@
 	}
 
 	export function getFiles(): any[] {
-		return attachedUploads.filter(u => !u.loading);
+		return attachedUploads.filter((u) => !u.loading);
 	}
 
 	export function clearUploads() {
@@ -625,7 +638,8 @@
 			streaming ||
 			sending ||
 			inputText.trim()
-		) return;
+		)
+			return;
 		voiceRearming = true;
 		voiceRestartTimer = window.setTimeout(() => {
 			voiceRestartTimer = 0;
@@ -679,7 +693,11 @@
 		}
 	}
 
-	async function stopVoiceCapture(): Promise<{ blob: Blob; filename: string; contentType: string } | null> {
+	async function stopVoiceCapture(): Promise<{
+		blob: Blob;
+		filename: string;
+		contentType: string;
+	} | null> {
 		const recorder = voiceCaptureRecorder;
 		const stream = voiceCaptureStream;
 		const chunks = voiceCaptureChunks;
@@ -732,9 +750,11 @@
 		} catch {}
 	}
 
-	async function transcribeVoiceModeCapture(
-		capture: { blob: Blob; filename: string; contentType: string }
-	): Promise<string> {
+	async function transcribeVoiceModeCapture(capture: {
+		blob: Blob;
+		filename: string;
+		contentType: string;
+	}): Promise<string> {
 		const form = new FormData();
 		form.append('file', capture.blob, capture.filename);
 		form.append('workspace', workspace);
@@ -937,12 +957,17 @@
 	const canSend = $derived(!!(inputText.trim() && selectedModel && !sending));
 </script>
 
-<div 
+<div
 	class="relative {isDragging ? 'ring-2 ring-blue-500 rounded-3xl' : ''}"
 	ondrop={handleDrop}
 	onpaste={handlePaste}
-	ondragover={(e) => { e.preventDefault(); isDragging = true; }}
-	ondragleave={() => { isDragging = false; }}
+	ondragover={(e) => {
+		e.preventDefault();
+		isDragging = true;
+	}}
+	ondragleave={() => {
+		isDragging = false;
+	}}
 	role="presentation"
 >
 	<!-- Queued messages (above input, matching open-webui layout) -->
@@ -966,7 +991,9 @@
 		<div
 			class="absolute left-2 bottom-full mb-1 z-50 w-60 max-h-40 overflow-y-auto rounded-xl bg-white dark:bg-[#1a1a1a] border border-gray-150 dark:border-white/6 shadow-xl p-0.5"
 		>
-			<div class="mb-0.5 px-2 pt-1 pb-0.5 text-[10px] leading-none text-gray-400 dark:text-gray-600">
+			<div
+				class="mb-0.5 px-2 pt-1 pb-0.5 text-[10px] leading-none text-gray-400 dark:text-gray-600"
+			>
 				Commands
 			</div>
 			{#if slashCommandIds.includes('compact')}
@@ -983,7 +1010,9 @@
 					}}
 					onmouseenter={() => (selectedSlashCommandIndex = slashCommandIds.indexOf('compact'))}
 				>
-					<span class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500">
+					<span
+						class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500"
+					>
 						<svg class="size-3.5 -rotate-90" viewBox="0 0 20 20" aria-hidden="true">
 							<circle
 								cx="10"
@@ -1028,7 +1057,9 @@
 					}}
 					onmouseenter={() => (selectedSlashCommandIndex = slashCommandIds.indexOf('plan'))}
 				>
-					<span class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500">
+					<span
+						class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500"
+					>
 						<svg
 							class="size-3.5"
 							viewBox="0 0 24 24"
@@ -1066,7 +1097,9 @@
 					}}
 					onmouseenter={() => (selectedSlashCommandIndex = slashCommandIds.indexOf('status'))}
 				>
-					<span class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500">
+					<span
+						class="flex items-center justify-center w-4 shrink-0 text-gray-400 dark:text-gray-500"
+					>
 						<svg
 							class="size-3.5"
 							viewBox="0 0 24 24"
@@ -1101,34 +1134,54 @@
 				{#each attachedUploads as upload}
 					<div class="relative group flex-shrink-0">
 						{#if upload.loading}
-							<div class="flex items-center justify-center size-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm">
+							<div
+								class="flex items-center justify-center size-8 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm"
+							>
 								<Spinner size={16} />
 							</div>
 						{:else if upload.type === 'image'}
-							<img src={upload.url} alt={upload.name} class="size-8 object-cover rounded-xl border border-gray-200 dark:border-white/10 shadow-sm" />
+							<img
+								src={upload.url}
+								alt={upload.name}
+								class="size-8 object-cover rounded-xl border border-gray-200 dark:border-white/10 shadow-sm"
+							/>
 						{:else}
-							<div class="relative group px-2 w-48 h-8 flex items-center gap-1.5 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/5 rounded-xl text-left flex-shrink-0 shadow-sm">
+							<div
+								class="relative group px-2 w-48 h-8 flex items-center gap-1.5 bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-white/5 rounded-xl text-left flex-shrink-0 shadow-sm"
+							>
 								<div class="shrink-0">
 									<Icon name="page-text" size={14} class="text-gray-500 dark:text-gray-400" />
 								</div>
 								<div class="flex flex-col justify-center w-full overflow-hidden">
-									<div class="dark:text-gray-100 text-xs flex justify-between items-center w-full gap-2">
+									<div
+										class="dark:text-gray-100 text-xs flex justify-between items-center w-full gap-2"
+									>
 										<div class="font-medium truncate flex-1">{upload.name}</div>
-										<div class="text-[10px] text-gray-500 capitalize shrink-0">{upload.type === 'file' ? 'File' : upload.type}</div>
+										<div class="text-[10px] text-gray-500 capitalize shrink-0">
+											{upload.type === 'file' ? 'File' : upload.type}
+										</div>
 									</div>
 								</div>
 							</div>
 						{/if}
-						
+
 						<div class="absolute -top-1.5 -right-1.5 z-10">
-							<button 
+							<button
 								class="bg-white text-black border border-white rounded-full group-hover:visible invisible transition outline-none shadow-sm flex items-center justify-center"
 								type="button"
 								onclick={() => removeUpload(upload.id)}
 								aria-label={$t('chat.removeUpload')}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-3.5" aria-hidden="true">
-									<path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"/>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+									class="size-3.5"
+									aria-hidden="true"
+								>
+									<path
+										d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z"
+									/>
 								</svg>
 							</button>
 						</div>
@@ -1139,9 +1192,15 @@
 		<!-- Editor area -->
 		<div class="px-2.5">
 			{#if $voiceModeEnabled}
-				<div class="pt-2 flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-gray-300">
+				<div
+					class="pt-2 flex items-center gap-2 text-[11px] font-medium text-gray-600 dark:text-gray-300"
+				>
 					<span class="relative flex size-2">
-						<span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 {voiceListening ? 'animate-ping' : ''}"></span>
+						<span
+							class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-70 {voiceListening
+								? 'animate-ping'
+								: ''}"
+						></span>
 						<span class="relative inline-flex size-2 rounded-full bg-emerald-500"></span>
 					</span>
 					<span>{voiceStatusLabel}</span>

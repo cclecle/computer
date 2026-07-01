@@ -6,11 +6,14 @@
 
 	// ── Compact binary WebSocket protocol ─────────────────────
 	// Client → Server:  byte 0 = type, rest = payload
-	//   0x00 + raw input bytes (microtask-batched for throughput)
-	//   0x02 + uint16 cols + uint16 rows, big-endian (5 bytes total)
-	// Server → Client:  raw PTY output bytes (no prefix)
-	const MSG_INPUT = 0;
-	const MSG_RESIZE = 2;
+//   0x00 + raw input bytes (microtask-batched for throughput)
+//   0x02 + uint16 cols + uint16 rows, big-endian (5 bytes total)
+//   0x03 stop, 0x04 force stop
+// Server → Client:  raw PTY output bytes (no prefix)
+const MSG_INPUT = 0;
+const MSG_RESIZE = 2;
+const MSG_STOP = 3;
+const MSG_FORCE_STOP = 4;
 
 	const textEncoder = new TextEncoder();
 
@@ -35,10 +38,24 @@
 	}
 
 	interface Props {
-		sessionId: string;
-	}
+	sessionId?: string;
+	wsPath?: string;
+	initialOutput?: string;
+	initialOffset?: number;
+	stopSignal?: number;
+	forceStopSignal?: number;
+	readOnly?: boolean;
+}
 
-	let { sessionId }: Props = $props();
+let {
+	sessionId = '',
+	wsPath = '',
+	initialOutput = '',
+	initialOffset = 0,
+	stopSignal = 0,
+	forceStopSignal = 0,
+	readOnly = false
+}: Props = $props();
 
 	let containerEl: HTMLDivElement | undefined = $state();
 	let term: Terminal | null = null;
@@ -61,7 +78,9 @@
 		try {
 			if ('wakeLock' in navigator) {
 				wakeLock = await navigator.wakeLock.request('screen');
-				wakeLock.addEventListener('release', () => { wakeLock = null; });
+				wakeLock.addEventListener('release', () => {
+					wakeLock = null;
+				});
 			}
 		} catch {
 			// Wake lock request can fail if document is hidden or permission denied
@@ -111,7 +130,11 @@
 
 	function getWsUrl(sid: string): string {
 		const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-		return `${proto}//${window.location.host}/api/terminal/${sid}/ws`;
+		const path = wsPath || `/api/terminal/${sid}/ws`;
+		const url = new URL(path, `${window.location.protocol}//${window.location.host}`);
+		if (initialOffset > 0) url.searchParams.set('offset', String(initialOffset));
+		url.protocol = proto;
+		return url.toString();
 	}
 
 	function doFit() {
@@ -156,6 +179,7 @@
 	// Writes directly into the pre-allocated buffer. Zero allocation
 	// for the common single-ASCII-keystroke path.
 	function sendInput(data: string) {
+		if (readOnly) return;
 		if (ws?.readyState !== WebSocket.OPEN) return;
 
 		if (data.length === 1 && data.charCodeAt(0) < 128) {
@@ -187,6 +211,28 @@
 		ws!.send(resizeBuf);
 	}
 
+let lastStopSignal = 0;
+$effect(() => {
+	if (!stopSignal || stopSignal === lastStopSignal) return;
+	lastStopSignal = stopSignal;
+	if (ws?.readyState === WebSocket.OPEN) {
+		ws.send(new Uint8Array([MSG_STOP]));
+	}
+});
+
+let lastForceStopSignal = 0;
+$effect(() => {
+	if (!forceStopSignal || forceStopSignal === lastForceStopSignal) return;
+	lastForceStopSignal = forceStopSignal;
+	if (ws?.readyState === WebSocket.OPEN) {
+		ws.send(new Uint8Array([MSG_FORCE_STOP]));
+	}
+});
+
+	$effect(() => {
+		if (term) term.options.disableStdin = readOnly;
+	});
+
 	onMount(() => {
 		if (!containerEl) return;
 
@@ -209,6 +255,7 @@
 			lineHeight: 1.3,
 			scrollback: 10000,
 			macOptionClickForceSelection: true,
+			disableStdin: readOnly,
 			theme: isDarkMode() ? darkTheme : lightTheme
 		});
 
@@ -258,6 +305,7 @@
 		fitAddon = new FitAddon();
 		term.loadAddon(fitAddon);
 		term.open(containerEl);
+		if (initialOutput) term.write(initialOutput);
 		// // iOS: Move xterm's textarea from inside .xterm-helpers (position:absolute,
 		// // offscreen) to a flex sibling BELOW the terminal.
 		// if ('ontouchstart' in window && term.textarea) {
@@ -404,12 +452,13 @@
 		if (!term || destroyed) return;
 
 		const url = getWsUrl(sessionId);
+		const label = sessionId || wsPath;
 		console.log(`[terminal] connecting to ${url}`);
 		ws = new WebSocket(url);
 		ws.binaryType = 'arraybuffer';
 
 		ws.onopen = () => {
-			console.log(`[terminal] WebSocket open for ${sessionId}`);
+			console.log(`[terminal] WebSocket open for ${label}`);
 			if (term) {
 				// Send ONE resize message with current dimensions.
 				// Do NOT call doFit() here; that would trigger term.onResize
@@ -430,9 +479,7 @@
 		};
 
 		ws.onclose = (e) => {
-			console.log(
-				`[terminal] WebSocket closed for ${sessionId}, code=${e.code}, reason=${e.reason}`
-			);
+			console.log(`[terminal] WebSocket closed for ${label}, code=${e.code}, reason=${e.reason}`);
 			if (destroyed) return;
 			reconnectTimer = setTimeout(() => {
 				if (!destroyed) connectWebSocket();
@@ -440,7 +487,7 @@
 		};
 
 		ws.onerror = (e) => {
-			console.error(`[terminal] WebSocket error for ${sessionId}`, e);
+			console.error(`[terminal] WebSocket error for ${label}`, e);
 		};
 
 		// NOTE: term.onData and term.onResize are registered in onMount,

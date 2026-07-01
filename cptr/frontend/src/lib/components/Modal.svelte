@@ -4,10 +4,16 @@
 	interface Props {
 		onclose: () => void;
 		class?: string;
+		overlayClass?: string;
 		children: Snippet;
 	}
 
-	let { onclose, class: className = '', children }: Props = $props();
+	let {
+		onclose,
+		class: className = '',
+		overlayClass = 'bg-black/50 items-center justify-center',
+		children
+	}: Props = $props();
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') onclose();
@@ -18,7 +24,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center"
+	class="fixed inset-0 z-[100] flex {overlayClass}"
 	onmousedown={onclose}
 	onkeydown={() => {}}
 >
