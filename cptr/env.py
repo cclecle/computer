@@ -97,3 +97,13 @@ if _cors_raw.strip() == "*":
     CORS_ALLOWED_ORIGINS = "*"
 else:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()] or "*"
+
+# ── Status monitoring (phase 2) ─────────────────────────────
+# Passive per-turn <status> monitoring line.
+MONITOR_STATUS_ENABLED = _env_bool("CPTR_MONITOR_STATUS_ENABLED", "true")
+# Context step granularity as a fraction of the compaction level
+# (default 0.10 = 10% buckets). Inert when compaction is disabled.
+try:
+    MONITOR_CTX_GRANULARITY = float(os.environ.get("CPTR_MONITOR_CTX_GRANULARITY", "0.10"))
+except ValueError:
+    MONITOR_CTX_GRANULARITY = 0.10

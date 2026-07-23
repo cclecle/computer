@@ -909,6 +909,18 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
             break
 
     result = []
+    # Phase 2: build a set of message ids in the chain so we can pick up
+    # status children (meta.type=="status") and inject them inline.
+    chain_ids = {m.id for m in chain}
+    status_children: dict[str, list[ChatMessage]] = {}  # parent_id -> [status msgs]
+    for am in all_msgs:
+        meta = am.meta or {}
+        if isinstance(meta, dict) and meta.get("type") == "status" and am.parent_id in chain_ids:
+            status_children.setdefault(am.parent_id, []).append(am)
+    # Sort each group by created_at so they inject in chronological order.
+    for k in status_children:
+        status_children[k].sort(key=lambda s: s.created_at or 0)
+
     for m in chain:
         # Skip in-progress assistant placeholders, but NOT the current
         # message being continued, which may have accumulated tool call
@@ -920,6 +932,12 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
         if m.id == message_id and not m.done and not m.content and not m.output:
             continue
         entry: dict = {"id": m.id, "role": m.role, "content": m.content or ""}
+
+        # Phase 2: inject any status children right after this message.
+        for sm in status_children.get(m.id, []):
+            result.append(
+                {"id": sm.id, "role": sm.role, "content": sm.content or ""}
+            )
 
         # Transform uploaded images into base64 multimodal blocks; inline text files
         if m.role == "user":
