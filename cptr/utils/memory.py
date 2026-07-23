@@ -1257,6 +1257,89 @@ async def build_memory_prompt(
     return "\n\n".join(blocks)
 
 
+def _dump_memory_root(root: MemoryRoot, budget: int) -> str:
+    """Return a deterministic, query-independent dump of a memory root.
+
+    Baseline file first, then remaining markdown files sorted by relative path
+    (NOT st_mtime), each trimmed to the shared budget. This is intentionally
+    independent of any recall query so the rendered bytes are identical every
+    time it runs — the property the frozen per-conversation system prompt needs.
+    """
+    if budget <= 0:
+        return ""
+    ordered: list[Path] = []
+    baseline_resolved = root.baseline_path.resolve()
+    if root.baseline_path.is_file():
+        ordered.append(root.baseline_path)
+    others = [
+        path
+        for path in _iter_markdown_files(root.root, include_trash=False)
+        if path.resolve() != baseline_resolved
+    ]
+    others.sort(key=lambda path: str(_relative_to_root(path, root.root)).lower())
+    ordered.extend(others)
+
+    parts: list[str] = []
+    remaining = budget
+    for path in ordered:
+        if remaining <= 0:
+            break
+        text = path.read_text(errors="replace").strip()
+        if not text:
+            continue
+        block = _trim_prompt_text(_prompt_safe_text(text, path.name), remaining)
+        if not block.strip():
+            continue
+        if path != root.baseline_path:
+            block = f"# {_relative_to_root(path, root.root)}\n{block}"
+        parts.append(block)
+        remaining -= len(block)
+    return "\n\n".join(parts).strip()
+
+
+async def build_frozen_memory_prompt(user_id: str | None, workspace: str) -> str:
+    """Query-independent full-memory snapshot for a frozen system prompt.
+
+    Unlike build_memory_prompt (a per-turn RAG recall keyed on recent messages,
+    with a live used/budget counter), this dumps the full memory
+    deterministically so the block is byte-identical across every turn of a
+    conversation. It is rendered once when a conversation is frozen and never
+    re-queried, so it forms a stable KV-cache prefix. See resolve_system_prompt.
+    """
+    if not user_id:
+        return ""
+    settings = await get_memory_settings()
+    if not settings["enabled"]:
+        return ""
+
+    render_roots: list[tuple[MemoryRoot, str, int]] = [
+        (
+            MemoryRoot("user", _user_memory_root(user_id), user_memory_path(user_id)),
+            "User Memory",
+            int(settings["user_char_limit"]),
+        )
+    ]
+    if workspace:
+        render_roots.append(
+            (
+                MemoryRoot(
+                    "workspace",
+                    _workspace_memory_root(user_id, workspace),
+                    workspace_memory_path(user_id, workspace),
+                ),
+                "Workspace Memory",
+                int(settings["workspace_char_limit"]),
+            )
+        )
+
+    blocks: list[str] = []
+    for root, title, budget in render_roots:
+        content = await asyncio.to_thread(_dump_memory_root, root, budget)
+        if content:
+            blocks.append(f"[{title}]\n{content}")
+    return "\n\n".join(blocks)
+
+
 async def search_memory_state(
     user_id: str,
     workspace: str,

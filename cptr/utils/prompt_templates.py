@@ -268,6 +268,7 @@ async def load_system_prompt(
     current_message: str = "",
     recent_messages: list[dict] | None = None,
     mentioned_files: list[str] | None = None,
+    freeze: bool = False,
 ) -> str:
     """Load and render the system prompt for a workspace/model.
 
@@ -276,6 +277,12 @@ async def load_system_prompt(
       2. Per-model system_prompt from chat.models config
       3. Global (*) system_prompt from chat.models config
       4. DEFAULT_SYSTEM_PROMPT
+
+    When ``freeze`` is True the {{MEMORY}} block is a query-independent full
+    dump (build_frozen_memory_prompt) instead of the per-turn recall, so the
+    rendered string is deterministic. Callers wanting a byte-stable
+    per-conversation snapshot should go through resolve_system_prompt, which
+    renders with freeze=True once and reuses the result verbatim.
     """
     template = None
 
@@ -308,15 +315,20 @@ async def load_system_prompt(
     memory = ""
     if user_id:
         try:
-            from cptr.utils.memory import build_memory_prompt
+            if freeze:
+                from cptr.utils.memory import build_frozen_memory_prompt
 
-            memory = await build_memory_prompt(
-                user_id,
-                workspace,
-                current_message=current_message,
-                recent_messages=recent_messages or [],
-                mentioned_files=mentioned_files or [],
-            )
+                memory = await build_frozen_memory_prompt(user_id, workspace)
+            else:
+                from cptr.utils.memory import build_memory_prompt
+
+                memory = await build_memory_prompt(
+                    user_id,
+                    workspace,
+                    current_message=current_message,
+                    recent_messages=recent_messages or [],
+                    mentioned_files=mentioned_files or [],
+                )
         except Exception:
             logger.debug("[memory] Failed to load managed memory", exc_info=True)
 
@@ -330,3 +342,66 @@ async def load_system_prompt(
 
     variables = _build_template_variables(workspace, model, memory, skills_enabled)
     return _render_system_template(template, variables)
+
+
+# Meta key under which the frozen per-conversation system prompt is stored.
+SYSTEM_PROMPT_SNAPSHOT_KEY = "system_prompt_snapshot"
+
+
+async def resolve_system_prompt(
+    chat_id: str,
+    workspace: str,
+    model: str = "",
+    user_id: str | None = None,
+    *,
+    persist: bool = True,
+) -> str:
+    """Return the frozen per-conversation system prompt, byte-stable across turns.
+
+    llama.cpp (and any prefix KV cache) only reuses the leading run of tokens
+    that is byte-identical to the previous request. The old per-turn render
+    re-queried memory (a recency-sorted RAG recall with a live counter) and
+    re-snapshotted the file tree near the TOP of the prompt, so the prefix
+    diverged early and the whole system prompt + history was reprocessed every
+    turn.
+
+    To fix that, the ENTIRE system prompt (runtime context, a query-independent
+    memory dump, workspace instructions, the skills catalog, and a file-tree
+    snapshot) is rendered ONCE — on a conversation's first turn — and stored on
+    the chat's ``meta`` under SYSTEM_PROMPT_SNAPSHOT_KEY. Every later turn reuses
+    that exact string, so the system prompt + prior history form one long stable
+    prefix and only the newest user turn is reprocessed.
+
+    Intentional tradeoff: memory, instructions, skills, and the file tree are
+    captured at freeze time and are NOT refreshed for the life of the
+    conversation — including changes made by this or other concurrent sessions.
+    Under concurrent modification those refreshes are noisy and permanently
+    bloat history, so a stable prefix wins. Start a NEW conversation to pick up
+    config/memory/file changes, or have the agent read current state on demand
+    via a tool. Compaction remains a separate, deliberate cache-reset event.
+
+    ``persist=False`` renders an ephemeral frozen-style prompt without writing it
+    (used for read-only token/context estimation before the first turn runs).
+    """
+    from cptr.models import Chat
+    from cptr.utils.config import now_ms
+
+    chat = await Chat.get_by_id(chat_id)
+    snapshot = (chat.meta or {}).get(SYSTEM_PROMPT_SNAPSHOT_KEY) if chat else None
+    if isinstance(snapshot, str) and snapshot:
+        return snapshot
+
+    rendered = await load_system_prompt(workspace, model, user_id=user_id, freeze=True)
+
+    if persist and chat is not None:
+        # Re-read is implicit above; merge onto the latest meta and never
+        # overwrite an existing snapshot (checked again to avoid a race where a
+        # concurrent turn on the same chat froze it first).
+        latest = await Chat.get_by_id(chat_id)
+        latest_meta = dict((latest.meta if latest else chat.meta) or {})
+        existing = latest_meta.get(SYSTEM_PROMPT_SNAPSHOT_KEY)
+        if isinstance(existing, str) and existing:
+            return existing
+        latest_meta[SYSTEM_PROMPT_SNAPSHOT_KEY] = rendered
+        await Chat.update_meta(chat_id, latest_meta, now_ms())
+    return rendered

@@ -465,7 +465,8 @@ async def _get_chat_context_usage(chat, model_id: str | None = None) -> dict | N
     if not message_id:
         return None
 
-    from cptr.utils.chat_task import _load_message_history, _load_system_prompt
+    from cptr.utils.chat_task import _load_message_history
+    from cptr.utils.prompt_templates import resolve_system_prompt
     from cptr.utils.context import (
         build_context_usage,
         estimate_context_usage,
@@ -478,7 +479,12 @@ async def _get_chat_context_usage(chat, model_id: str | None = None) -> dict | N
     workspace = (chat.meta or {}).get("workspace", "")
     model = model_id or await _infer_chat_model(chat.id)
     compact_token_threshold = await load_compact_token_threshold(model)
-    system = await _load_system_prompt(workspace, model or "", user_id=chat.user_id)
+    # Read-only estimate: reuse the frozen snapshot if the conversation already
+    # has one; otherwise render an ephemeral frozen-style prompt without
+    # persisting (persistence is tied to the first real turn).
+    system = await resolve_system_prompt(
+        chat.id, workspace, model or "", user_id=chat.user_id, persist=False
+    )
     if existing_summary:
         system += f"\n\n[CONVERSATION SUMMARY]\n{existing_summary}"
 

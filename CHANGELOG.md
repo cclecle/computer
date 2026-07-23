@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- ⚡ **Local model conversations reuse their cache instead of reprocessing every turn.** The system prompt (runtime context, memory, workspace instructions, skills, and the file tree) is now captured once when a conversation starts and reused unchanged for the rest of that conversation. That makes the system prompt and history a stable prefix, so llama.cpp and other prefix-caching backends keep them warm and only process your newest message — turning near-full reprocessing every turn into a small incremental cost. Tradeoff by design: memory, instruction, skill, and file-tree changes made *after* a conversation has begun are not reflected mid-conversation (including changes from other concurrent sessions). Start a new conversation to pick them up, or ask Computer to read the current state with a tool. Compaction remains a separate, deliberate cache reset.
+
 ## [0.9.15] - 2026-07-23
 
 ### Fixed

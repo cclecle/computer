@@ -60,7 +60,7 @@ from cptr.utils.tools import (
 )
 from cptr.utils.chat_export import export_chat_to_file
 from cptr.utils.json_parser import extract_json
-from cptr.utils.prompt_templates import load_system_prompt as _load_system_prompt
+from cptr.utils.prompt_templates import resolve_system_prompt as _resolve_system_prompt
 from cptr.utils.agents.events import (
     AgentDone,
     AgentError,
@@ -448,23 +448,6 @@ def _plain_message_text(content) -> str:
             if isinstance(block, dict) and block.get("type") == "text"
         )
     return str(content or "")
-
-
-def _memory_recall_inputs(
-    messages: list[dict],
-    regeneration_prompt: str | None = None,
-) -> tuple[str, list[str]]:
-    current_message = regeneration_prompt or ""
-    if not current_message:
-        for message in reversed(messages):
-            if message.get("role") == "user":
-                current_message = _plain_message_text(message.get("content"))
-                break
-    mentioned_files = re.findall(
-        r"(?:^|\s)([./~]?[A-Za-z0-9_.\-/]+(?:\.[A-Za-z0-9_]+))",
-        current_message,
-    )[:12]
-    return current_message, mentioned_files
 
 
 # ── Pending input processing ────────────────────────────────
@@ -1489,14 +1472,13 @@ async def run_chat_task(
         skill_create_requested = _apply_skills_create_prompt(
             messages, allowed=skill_authoring_allowed, denial_reason=skill_create_denial_reason
         )
-        memory_message, memory_files = _memory_recall_inputs(messages, regeneration_prompt)
-        system = await _load_system_prompt(
+        # Frozen per-conversation snapshot: rendered once, reused byte-for-byte
+        # on every later turn so the KV-cache prefix stays stable.
+        system = await _resolve_system_prompt(
+            chat_id,
             workspace,
             agent_target.full_model_id,
             user_id=user_id,
-            current_message=memory_message,
-            recent_messages=messages,
-            mentioned_files=memory_files,
         )
         if loaded_summary:
             system += f"\n\n[CONVERSATION SUMMARY]\n{loaded_summary}"
@@ -1803,14 +1785,13 @@ async def run_chat_task(
         skill_create_requested = _apply_skills_create_prompt(
             messages, allowed=skill_authoring_allowed, denial_reason=skill_create_denial_reason
         )
-        memory_message, memory_files = _memory_recall_inputs(messages, regeneration_prompt)
-        system = await _load_system_prompt(
+        # Frozen per-conversation snapshot: rendered once, reused byte-for-byte
+        # on every later turn so the KV-cache prefix stays stable.
+        system = await _resolve_system_prompt(
+            chat_id,
             workspace,
             model,
             user_id=user_id,
-            current_message=memory_message,
-            recent_messages=messages,
-            mentioned_files=memory_files,
         )
         if loaded_summary:
             system += f"\n\n[CONVERSATION SUMMARY]\n{loaded_summary}"
@@ -1950,15 +1931,14 @@ async def run_chat_task(
                 await ChatMessage.update(checkpoint_message_id, chat_summary=summary)
                 loaded_summary = summary
 
-                # Append summary to system prompt (works for all providers)
-                memory_message, memory_files = _memory_recall_inputs(keep_zone, regeneration_prompt)
-                system = await _load_system_prompt(
+                # Append summary to system prompt (works for all providers).
+                # The base stays the frozen snapshot; compaction's cache reset
+                # comes from the changed summary + dropped messages, not the base.
+                system = await _resolve_system_prompt(
+                    chat_id,
                     workspace,
                     model,
                     user_id=user_id,
-                    current_message=memory_message,
-                    recent_messages=keep_zone,
-                    mentioned_files=memory_files,
                 )
                 system += f"\n\n[CONVERSATION SUMMARY]\n{summary}"
                 # Re-inject attached skills after compaction (protect from pruning)
