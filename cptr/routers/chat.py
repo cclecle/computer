@@ -13,12 +13,10 @@ from pydantic import BaseModel
 
 from cptr.models import Chat, ChatMessage, Config, is_internal_chat
 from cptr.utils.config import check_access, now_ms, _get_jwt_secret
-from cptr.utils.prompt_templates import SYSTEM_PROMPT_SNAPSHOT_KEY
 from cptr.utils.status_monitor import (
     evaluate_triggers,
     format_status_line,
-    seed_state_from_snapshot,
-    should_emit,
+    seed_state,
     update_state_after_emit,
 )
 from cptr.utils.crypto import decrypt_key
@@ -824,26 +822,22 @@ async def send_message(body: SendMessageRequest, request: Request):
                 )
 
                 # ── Phase 2: seed monitor state on first turn, then emit status ──
-                snapshot = (chat.meta or {}).get(SYSTEM_PROMPT_SNAPSHOT_KEY)
-                await seed_state_from_snapshot(chat.id, snapshot)
-
-                if await should_emit(chat, body.model_id):
-                    triggers = await evaluate_triggers(chat, [], body.model_id)
-                    status_text = format_status_line(triggers)
-                    if status_text:
-                        await ChatMessage.create(
-                            chat_id=chat.id,
-                            role="user",
-                            content=f"<status>{status_text}</status>",
-                            parent_id=user_msg.id,
-                            meta={"internal": True, "type": "status"},
-                            created_at=now_ms(),
-                        )
-                        # Update monitor state after emit with live fingerprints
-                        # and the actual ctx_step from evaluate_triggers
-                        await update_state_after_emit(
-                            chat.id, snapshot, triggers.get("ctx_step", 0)
-                        )
+                # seed_state returns the chat carrying the seeded fingerprints;
+                # evaluating against the stale copy would report every trigger
+                # as changed on turn one.
+                seeded = await seed_state(chat.id) or chat
+                triggers = await evaluate_triggers(seeded, body.model_id)
+                status_text = format_status_line(triggers)
+                if status_text:
+                    await ChatMessage.create(
+                        chat_id=chat.id,
+                        role="user",
+                        content=f"<status>{status_text}</status>",
+                        parent_id=user_msg.id,
+                        meta={"internal": True, "type": "status"},
+                        created_at=now_ms(),
+                    )
+                    await update_state_after_emit(chat.id, triggers)
 
                 assistant_parent = user_msg.id
 

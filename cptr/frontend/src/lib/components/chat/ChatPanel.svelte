@@ -205,14 +205,14 @@
 		return map;
 	}
 
-  function isPendingHiddenMessage(m: ChatMessageRow): boolean {
-    return !!(
-      m.meta?.queued ||
-      m.meta?.async_subagent_pending ||
-      (m.meta?.internal === true && m.meta?.type === 'subagent' && m.meta?.status === 'pending') ||
-      (m.meta?.internal === true && m.meta?.type === 'status')
-    );
-  }
+	function isPendingHiddenMessage(m: ChatMessageRow): boolean {
+		return !!(
+			m.meta?.queued ||
+			m.meta?.async_subagent_pending ||
+			(m.meta?.internal === true && m.meta?.type === 'subagent' && m.meta?.status === 'pending') ||
+			(m.meta?.internal === true && m.meta?.type === 'status')
+		);
+	}
 
 	function nearestVisibleAncestorId(
 		messageId: string | null,

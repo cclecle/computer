@@ -768,6 +768,17 @@ async def generate_chat_title(
 # ── Message history ─────────────────────────────────────────
 
 
+def _append_status_rows(result: list[dict], rows: list | None) -> None:
+    """Emit status rows right AFTER the message they annotate.
+
+    Status rows hang off their message as a side branch, so the chain walk
+    misses them. The loop below has two exit paths — reconstructed output
+    and a plain entry — and both must flush, or a row silently vanishes.
+    """
+    for sm in rows or []:
+        result.append({"id": sm.id, "role": sm.role, "content": sm.content or ""})
+
+
 def _output_items_to_messages(output_items: list[dict], message_id: str | None = None) -> list[dict]:
     """Convert ordered persisted output items into model-visible messages."""
     native_agent_call_ids = {
@@ -933,12 +944,6 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
             continue
         entry: dict = {"id": m.id, "role": m.role, "content": m.content or ""}
 
-        # Phase 2: inject any status children right after this message.
-        for sm in status_children.get(m.id, []):
-            result.append(
-                {"id": sm.id, "role": sm.role, "content": sm.content or ""}
-            )
-
         # Transform uploaded images into base64 multimodal blocks; inline text files
         if m.role == "user":
             attached_files = (m.meta or {}).get("files", [])
@@ -997,9 +1002,11 @@ async def _load_message_history(chat_id: str, message_id: str) -> tuple[list[dic
             output_messages = _output_items_to_messages(m.output, m.id)
             if output_messages:
                 result.extend(output_messages)
+                _append_status_rows(result, status_children.get(m.id))
                 continue
 
         result.append(entry)
+        _append_status_rows(result, status_children.get(m.id))
 
     # ── Final sanitization: ensure every tool_call has a matching tool result ──
     # This catches edge cases from compaction, DB corruption, or partial persistence.

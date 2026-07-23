@@ -45,9 +45,25 @@ def is_gitignored(
         rel = path.resolve().relative_to(base).as_posix()
     except ValueError:
         return False
+    return is_gitignored_rel(rel, patterns, is_dir=is_dir)
+
+
+def is_gitignored_rel(
+    rel: str,
+    patterns: tuple[GitignorePattern, ...],
+    *,
+    is_dir: bool,
+) -> bool:
+    """Match a base-relative POSIX path against loaded patterns.
+
+    Cheaper than is_gitignored for bulk walks: the caller already knows the
+    relative path, so this skips the per-path resolve() syscall.
+    """
+    if not patterns:
+        return False
 
     ignored = False
-    name = path.name
+    name = rel.rsplit("/", 1)[-1]
     for pattern, negated, directory_only, anchored in patterns:
         if directory_only and not is_dir:
             continue

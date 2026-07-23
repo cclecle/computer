@@ -7,9 +7,13 @@ chat.meta["_monitor"] so it survives restarts.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
+import os
+from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
 
 from cptr.env import MONITOR_CTX_GRANULARITY, MONITOR_STATUS_ENABLED
 from cptr.models import Chat
@@ -20,11 +24,38 @@ from cptr.utils.context import (
     load_compact_token_threshold,
     usage_context_tokens,
 )
-from cptr.utils.prompt_templates import SYSTEM_PROMPT_SNAPSHOT_KEY, resolve_system_prompt
+from cptr.utils.gitignore import is_gitignored_rel, load_gitignore
+from cptr.utils.prompt_templates import SYSTEM_PROMPT_SNAPSHOT_KEY
 
 logger = logging.getLogger(__name__)
 
 META_KEY = "_monitor"
+
+# Directories never worth watching: VCS internals, dependency and build
+# output, and cptr's own chat store — which is rewritten on every turn and
+# would otherwise fire the file trigger forever.
+SKIP_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".cptr",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".next",
+    "build",
+    "dist",
+    ".svelte-kit",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".tox",
+    ".idea",
+}
+
+# Hard cap so a huge workspace can never stall a turn.
+MAX_WALK_ENTRIES = 20_000
 
 # ── Config ───────────────────────────────────────────────────
 
@@ -41,31 +72,96 @@ def _fingerprint(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", errors="replace")).hexdigest()[:16]
 
 
-def _memory_from_snapshot(snapshot: str | None) -> str:
-    """Extract the <memory> block from a frozen system prompt snapshot."""
-    if not snapshot:
-        return ""
-    start = snapshot.find("<memory>")
-    if start == -1:
-        return ""
-    end = snapshot.find("</memory>", start)
-    if end == -1:
-        return ""
-    return snapshot[start:end + len("</memory>")]
+def workspace_file_digest(workspace: str) -> str:
+    """Fingerprint every visible file in *workspace* by path, mtime and size.
 
+    Deliberately *not* the frozen prompt's file tree: that listing is two
+    levels deep and carries names only, so editing a file — or adding one
+    three directories down — left it byte-identical and the trigger never
+    fired. Hashing stat metadata over the whole tree catches edits, creates,
+    deletes and renames alike.
 
-def _file_tree_from_snapshot(snapshot: str | None) -> str:
-    """Extract the file tree section from a frozen system prompt snapshot.
-
-    The file tree appears after 'Files:\n' in the system prompt.
+    Gitignored paths are skipped so build output, logs and caches don't fire
+    the trigger on every turn. Blocking I/O — call via a thread.
     """
-    if not snapshot:
+    root = Path(workspace) if workspace else None
+    if root is None or not root.is_dir():
         return ""
-    marker = "Files:\n"
-    idx = snapshot.find(marker)
-    if idx == -1:
-        return ""
-    return snapshot[idx:]
+
+    base, patterns = load_gitignore(root)
+    # Patterns are relative to the repo root, which may sit above the
+    # workspace; resolve the offset once instead of per entry.
+    try:
+        prefix = root.resolve().relative_to(base).as_posix()
+    except ValueError:
+        prefix = ""
+    prefix = "" if prefix == "." else prefix
+
+    records: list[str] = []
+    # Breadth-first over name-sorted entries: with a cap in play the walk has
+    # to visit the same files in the same order every time, or a workspace
+    # past the cap would fire the trigger just because the filesystem handed
+    # back a different scandir order.
+    queue: deque[tuple[Path, str]] = deque([(root, "")])
+
+    while queue:
+        current, current_rel = queue.popleft()
+        try:
+            with os.scandir(current) as it:
+                entries = sorted(it, key=lambda e: e.name)
+        except OSError:
+            continue
+
+        for entry in entries:
+            try:
+                is_dir = entry.is_dir(follow_symlinks=False)
+            except OSError:
+                continue
+            if is_dir and entry.name in SKIP_DIRS:
+                continue
+
+            rel = f"{current_rel}/{entry.name}" if current_rel else entry.name
+            match_rel = f"{prefix}/{rel}" if prefix else rel
+            if is_gitignored_rel(match_rel, patterns, is_dir=is_dir):
+                continue
+
+            if is_dir:
+                queue.append((Path(entry.path), rel))
+                continue
+
+            try:
+                st = entry.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            records.append(f"{rel}\0{st.st_mtime_ns}\0{st.st_size}")
+
+        if len(records) >= MAX_WALK_ENTRIES:
+            records = records[:MAX_WALK_ENTRIES]
+            break
+
+    records.sort()
+    return _fingerprint("\n".join(records))
+
+
+async def _live_fingerprints(chat: Chat) -> tuple[str, str]:
+    """Return (memory_fp, file_fp) computed from LIVE state, not the snapshot."""
+    workspace = (chat.meta or {}).get("workspace") or ""
+
+    try:
+        from cptr.utils.memory import build_frozen_memory_prompt
+
+        live_memory = await build_frozen_memory_prompt(chat.user_id, workspace)
+    except Exception:
+        logger.debug("[monitor] memory fingerprint failed", exc_info=True)
+        live_memory = ""
+
+    try:
+        file_fp = await asyncio.to_thread(workspace_file_digest, workspace)
+    except Exception:
+        logger.debug("[monitor] file fingerprint failed", exc_info=True)
+        file_fp = ""
+
+    return _fingerprint(live_memory), file_fp
 
 
 # ── Context step (compaction-anchored) ───────────────────────
@@ -159,9 +255,45 @@ async def _save_state(chat_id: str, state: dict) -> None:
 # ── Trigger evaluation ───────────────────────────────────────
 
 
+def _idle_triggers() -> dict:
+    return {
+        "memory_changed": False,
+        "file_list_changed": False,
+        "ctx_step_changed": False,
+        "ctx_step": 0,
+        "ctx_info": None,
+        "timestamp": "",
+        "memory_fp": "",
+        "file_fp": "",
+    }
+
+
+def _fmt_tokens(n: int) -> str:
+    return f"{n // 1000}k" if n >= 1000 else str(n)
+
+
+async def _ctx_state(
+    chat: Chat, model: str, granularity: float | None
+) -> tuple[int, bool, dict | None]:
+    """Return (ctx_step, changed, ctx_info) for the chat's current leaf."""
+    if not chat.current_message_id:
+        return (0, False, None)
+
+    tokens, level = await _current_context_tokens(chat.id, chat.current_message_id, model)
+    step = _compute_ctx_step(tokens, level, granularity)
+    ctx_info = None
+    if level > 0:
+        ctx_info = {
+            "used": _fmt_tokens(tokens),
+            "level": _fmt_tokens(level),
+            "pct": round((tokens / level) * 100),
+        }
+    changed = step != _load_state(chat.meta).get("last_ctx_step", 0)
+    return (step, changed, ctx_info)
+
+
 async def evaluate_triggers(
     chat: Chat,
-    messages: list,
     model: str = "",
     *,
     granularity: float | None = None,
@@ -169,75 +301,27 @@ async def evaluate_triggers(
     """Evaluate which triggers have crossed since the last emit.
 
     Returns dict with keys:
-        memory_changed, file_list_changed, ctx_step_changed,
-        ctx_info (dict with used/level/pct or None),
-        timestamp
+        memory_changed, file_list_changed, ctx_step_changed, ctx_step,
+        ctx_info (dict with used/level/pct or None), timestamp, and the
+        freshly computed memory_fp / file_fp so update_state_after_emit can
+        record exactly what was compared rather than re-reading disk.
     """
     if not _enabled():
-        return {
-            "memory_changed": False,
-            "file_list_changed": False,
-            "ctx_step_changed": False,
-            "ctx_info": None,
-            "timestamp": "",
-        }
+        return _idle_triggers()
 
     state = _load_state(chat.meta)
-    workspace = (chat.meta or {}).get("workspace", "")
-
-    # ── Memory fingerprint (LIVE, not frozen snapshot) ──
-    try:
-        from cptr.utils.memory import build_frozen_memory_prompt
-        live_memory = await build_frozen_memory_prompt(chat.user_id, workspace or "")
-    except Exception:
-        live_memory = ""
-    current_mem_fp = _fingerprint(live_memory)
-    memory_changed = current_mem_fp != state.get("last_memory_fp", "")
-
-    # ── File list fingerprint (LIVE, not frozen snapshot) ──
-    try:
-        from cptr.utils.prompt_templates import _get_file_tree
-        live_file_tree = _get_file_tree(workspace or "")
-    except Exception:
-        live_file_tree = ""
-    current_file_fp = _fingerprint(live_file_tree)
-    file_list_changed = current_file_fp != state.get("last_file_fp", "")
-
-    # ── Context step ──
-    ctx_info = None
-    ctx_step_changed = False
-    current_ctx_step = 0
-
-    # Find the current leaf message id
-    current_msg_id = chat.current_message_id
-    if current_msg_id:
-        tokens, level = await _current_context_tokens(chat.id, current_msg_id, model)
-        current_ctx_step = _compute_ctx_step(tokens, level, granularity)
-        if level > 0:
-            pct = round((tokens / level) * 100) if level > 0 else 0
-            # Format tokens in k notation
-            def _fmt(n: int) -> str:
-                if n >= 1000:
-                    return f"{n // 1000}k"
-                return str(n)
-
-            ctx_info = {
-                "used": _fmt(tokens),
-                "level": _fmt(level),
-                "pct": pct,
-            }
-        last_step = state.get("last_ctx_step", 0)
-        ctx_step_changed = current_ctx_step != last_step
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    memory_fp, file_fp = await _live_fingerprints(chat)
+    ctx_step, ctx_step_changed, ctx_info = await _ctx_state(chat, model, granularity)
 
     return {
-        "memory_changed": memory_changed,
-        "file_list_changed": file_list_changed,
+        "memory_changed": memory_fp != state.get("last_memory_fp", ""),
+        "file_list_changed": file_fp != state.get("last_file_fp", ""),
         "ctx_step_changed": ctx_step_changed,
-        "ctx_step": current_ctx_step,
+        "ctx_step": ctx_step,
         "ctx_info": ctx_info,
-        "timestamp": timestamp,
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+        "memory_fp": memory_fp,
+        "file_fp": file_fp,
     }
 
 
@@ -274,37 +358,21 @@ def format_status_line(triggers: dict) -> str:
 # ── State update after emit ──────────────────────────────────
 
 
-async def _get_live_fingerprints(chat: Chat) -> tuple[str, str]:
-    """Return (memory_fp, file_fp) from LIVE state."""
-    workspace = (chat.meta or {}).get("workspace", "")
-    try:
-        from cptr.utils.memory import build_frozen_memory_prompt
-        live_memory = await build_frozen_memory_prompt(chat.user_id, workspace or "")
-    except Exception:
-        live_memory = ""
-    try:
-        from cptr.utils.prompt_templates import _get_file_tree
-        live_file_tree = _get_file_tree(workspace or "")
-    except Exception:
-        live_file_tree = ""
-    return _fingerprint(live_memory), _fingerprint(live_file_tree)
+async def update_state_after_emit(chat_id: str, triggers: dict) -> None:
+    """Record the fingerprints that were just reported to the model.
 
-
-async def update_state_after_emit(
-    chat_id: str,
-    snapshot: str | None,
-    ctx_step: int,
-) -> None:
-    """Update fingerprints and ctx_step after a successful emit."""
+    Takes the fingerprints straight from *triggers* rather than re-reading
+    disk: a file touched between evaluation and this call would otherwise be
+    baked into the new state and never reported at all.
+    """
     chat = await Chat.get_by_id(chat_id)
     if not chat:
         return
 
-    mem_fp, file_fp = await _get_live_fingerprints(chat)
-    state = _load_state(chat.meta)
-    state["last_memory_fp"] = mem_fp
-    state["last_file_fp"] = file_fp
-    state["last_ctx_step"] = ctx_step
+    state = dict(_load_state(chat.meta))
+    state["last_memory_fp"] = triggers.get("memory_fp", "")
+    state["last_file_fp"] = triggers.get("file_fp", "")
+    state["last_ctx_step"] = triggers.get("ctx_step", 0)
 
     await _save_state(chat_id, state)
 
@@ -312,29 +380,21 @@ async def update_state_after_emit(
 # ── Seed state from live state (conversation start) ──────────
 
 
-async def seed_state_from_snapshot(chat_id: str, snapshot: str | None) -> None:
-    """Seed fingerprints from LIVE state so stable state emits never."""
+async def seed_state(chat_id: str) -> Chat | None:
+    """Seed fingerprints on a chat's first turn so stable state never emits.
+
+    Returns the chat with the seeded state applied, so the caller evaluates
+    triggers against what was just persisted instead of a stale copy.
+    """
     chat = await Chat.get_by_id(chat_id)
-    if not chat:
-        return
+    if not chat or not _enabled():
+        return chat
 
-    state = _load_state(chat.meta)
-    # Only seed if not already seeded (empty fingerprints = unseeded)
-    if not state.get("last_memory_fp") and not state.get("last_file_fp"):
-        mem_fp, file_fp = await _get_live_fingerprints(chat)
-        state["last_memory_fp"] = mem_fp
-        state["last_file_fp"] = file_fp
-        await _save_state(chat_id, state)
+    state = dict(_load_state(chat.meta))
+    # Empty fingerprints mean unseeded — a fresh conversation.
+    if state.get("last_memory_fp") or state.get("last_file_fp"):
+        return chat
 
-
-# ── Public convenience: should we emit? ──────────────────────
-
-
-async def should_emit(chat: Chat, model: str = "") -> bool:
-    """Quick check: will any trigger fire this turn?"""
-    triggers = await evaluate_triggers(chat, [], model)
-    return any([
-        triggers["memory_changed"],
-        triggers["file_list_changed"],
-        triggers["ctx_step_changed"],
-    ])
+    state["last_memory_fp"], state["last_file_fp"] = await _live_fingerprints(chat)
+    await _save_state(chat_id, state)
+    return await Chat.get_by_id(chat_id)
